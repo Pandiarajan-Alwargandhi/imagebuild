@@ -9,7 +9,6 @@ pipeline {
         DOCKER_IMAGE = 'artifactory.shs.saas.temenos.cloud:443/dockervirtual/testimages/hello-world-image'
         DOCKER_CREDENTIALS_ID = 'docker-registry-credentials-id'
         AZURE_CREDENTIALS_ID = 'git-repo-id'  // Replace with your Azure DevOps credentials ID
-        KUBE_CONFIG = credentials('aks-service-principal-credentials-id')
         KUBE_NAMESPACE = 'sanitytest'
     }
     stages {
@@ -34,13 +33,25 @@ pipeline {
                 }
             }
         }
+        stage('Authenticate with Azure') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'aks-service-principal-credentials-id', usernameVariable: 'AZURE_CLIENT_ID', passwordVariable: 'AZURE_CLIENT_SECRET')]) {
+                    script {
+                        sh '''
+                            az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant YOUR_TENANT_ID
+                            az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER_NAME --file kubeconfig
+                        '''
+                    }
+                }
+            }
+        }
         stage('Create Namespace') {
             steps {
                 script {
                     // Check if namespace exists, create if not
-                    def namespaceExists = bat(script: "kubectl get namespace %KUBE_NAMESPACE%", returnStatus: true)
+                    def namespaceExists = sh(script: "kubectl --kubeconfig=kubeconfig get namespace ${KUBE_NAMESPACE}", returnStatus: true)
                     if (namespaceExists != 0) {
-                        bat "kubectl create namespace %KUBE_NAMESPACE%"
+                        sh "kubectl --kubeconfig=kubeconfig create namespace ${KUBE_NAMESPACE}"
                     } else {
                         echo "Namespace ${env.KUBE_NAMESPACE} already exists."
                     }
@@ -51,9 +62,8 @@ pipeline {
             steps {
                 script {
                     // Deploy to AKS
-                    bat '''
-                        kubectl config use-context %AKS_CLUSTER_NAME%
-                        kubectl --kubeconfig=%KUBE_CONFIG% apply -f job.yaml -n %KUBE_NAMESPACE%
+                    sh '''
+                        kubectl --kubeconfig=kubeconfig apply -f job.yaml -n ${KUBE_NAMESPACE}
                     '''
                 }
             }
