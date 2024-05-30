@@ -32,10 +32,6 @@ pipeline {
     }
     post {
         always {
-            script {
-                // Delete the local Docker image after pushing
-                sh "docker rmi ${env.DOCKER_IMAGE}:${env.BUILD_NUMBER}"
-            }
             cleanWs()
         }
     }
