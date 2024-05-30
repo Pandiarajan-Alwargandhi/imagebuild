@@ -37,12 +37,12 @@ pipeline {
         stage('Create Namespace') {
             steps {
                 script {
-                    // Check if namespace exists, create if not
-                    def namespaceExists = sh(script: "kubectl get namespace $KUBE_NAMESPACE", returnStatus: true)
+                    // Use Git Bash for the shell command
+                    def namespaceExists = sh(script: "kubectl get namespace ${KUBE_NAMESPACE}", returnStatus: true, shell: 'bash')
                     if (namespaceExists != 0) {
-                        sh "kubectl create namespace $KUBE_NAMESPACE"
+                        sh "kubectl create namespace ${KUBE_NAMESPACE}", shell: 'bash'
                     } else {
-                        echo "Namespace $KUBE_NAMESPACE already exists."
+                        echo "Namespace ${KUBE_NAMESPACE} already exists."
                     }
                 }
             }
@@ -50,11 +50,11 @@ pipeline {
         stage('Deploy to AKS') {
             steps {
                 script {
-                    // Apply Kubernetes Job manifest
+                    // Use Git Bash for the shell command
                     sh '''
-                        kubectl config use-context $AKS_CLUSTER_NAME
-                        kubectl --kubeconfig=$KUBE_CONFIG apply -f job.yaml -n $KUBE_NAMESPACE
-                    '''
+                        kubectl config use-context ${AKS_CLUSTER_NAME}
+                        kubectl --kubeconfig=${KUBE_CONFIG} apply -f job.yaml -n ${KUBE_NAMESPACE}
+                    ''', shell: 'bash'
                 }
             }
         }
