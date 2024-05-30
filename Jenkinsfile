@@ -24,7 +24,6 @@ pipeline {
                 script {
                     docker.withRegistry('https://artifactory.shs.saas.temenos.cloud:443', env.DOCKER_CREDENTIALS_ID) {
                         dockerImage.push("${env.BUILD_NUMBER}")
-                        dockerImage.push("latest")
                     }
                 }
             }
@@ -32,10 +31,6 @@ pipeline {
     }
     post {
         always {
-            script {
-                // Delete the local Docker image after pushing
-                sh "docker rmi ${env.DOCKER_IMAGE}:${env.BUILD_NUMBER}"
-            }
             cleanWs()
         }
     }
