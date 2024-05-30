@@ -24,7 +24,6 @@ pipeline {
                 script {
                     docker.withRegistry('https://artifactory.shs.saas.temenos.cloud:443', env.DOCKER_CREDENTIALS_ID) {
                         dockerImage.push("${env.BUILD_NUMBER}")
-                        dockerImage.push("latest")
                     }
                 }
             }
