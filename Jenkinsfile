@@ -3,6 +3,7 @@ pipeline {
     parameters {
         string(name: 'AKS_CLUSTER_NAME', defaultValue: '', description: 'Name of the AKS cluster')
         string(name: 'RESOURCE_GROUP', defaultValue: '', description: 'Name of the Azure resource group')
+        string(name: 'TENANT_ID', defaultValue: '', description: 'Azure Tenant ID')
     }
     environment {
         GIT_URL = 'https://github.com/Pandiarajan-Alwargandhi/imagebuild.git'
@@ -10,6 +11,7 @@ pipeline {
         DOCKER_CREDENTIALS_ID = 'docker-registry-credentials-id'
         AZURE_CREDENTIALS_ID = 'git-repo-id'  // Replace with your Azure DevOps credentials ID
         KUBE_NAMESPACE = 'sanitytest'
+        KUBECONFIG_FILE = 'kubeconfig'
     }
     stages {
         stage('Checkout') {
@@ -33,38 +35,10 @@ pipeline {
                 }
             }
         }
-        stage('Authenticate with Azure') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'aks-service-principal-credentials-id', usernameVariable: 'AZURE_CLIENT_ID', passwordVariable: 'AZURE_CLIENT_SECRET')]) {
-                    script {
-                        bat '''
-                            az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant YOUR_TENANT_ID
-                            az aks get-credentials --resource-group %RESOURCE_GROUP% --name %AKS_CLUSTER_NAME% --file kubeconfig
-                        '''
-                    }
-                }
-            }
-        }
-        stage('Create Namespace') {
-            steps {
-                script {
-                    // Check if namespace exists, create if not
-                    def namespaceExists = bat(script: "kubectl --kubeconfig=kubeconfig get namespace %KUBE_NAMESPACE%", returnStatus: true)
-                    if (namespaceExists != 0) {
-                        bat "kubectl --kubeconfig=kubeconfig create namespace %KUBE_NAMESPACE%"
-                    } else {
-                        echo "Namespace ${env.KUBE_NAMESPACE} already exists."
-                    }
-                }
-            }
-        }
         stage('Deploy to AKS') {
             steps {
                 script {
-                    // Deploy to AKS
-                    bat '''
-                        kubectl --kubeconfig=kubeconfig apply -f job.yaml -n %KUBE_NAMESPACE%
-                    '''
+                    sh './deploy.sh'  // Call the shell script file
                 }
             }
         }
