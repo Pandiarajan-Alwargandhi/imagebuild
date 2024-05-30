@@ -37,9 +37,9 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'aks-service-principal-credentials-id', usernameVariable: 'AZURE_CLIENT_ID', passwordVariable: 'AZURE_CLIENT_SECRET')]) {
                     script {
-                        sh '''
-                            az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant YOUR_TENANT_ID
-                            az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER_NAME --file kubeconfig
+                        bat '''
+                            az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant YOUR_TENANT_ID
+                            az aks get-credentials --resource-group %RESOURCE_GROUP% --name %AKS_CLUSTER_NAME% --file kubeconfig
                         '''
                     }
                 }
@@ -49,9 +49,9 @@ pipeline {
             steps {
                 script {
                     // Check if namespace exists, create if not
-                    def namespaceExists = sh(script: "kubectl --kubeconfig=kubeconfig get namespace ${KUBE_NAMESPACE}", returnStatus: true)
+                    def namespaceExists = bat(script: "kubectl --kubeconfig=kubeconfig get namespace %KUBE_NAMESPACE%", returnStatus: true)
                     if (namespaceExists != 0) {
-                        sh "kubectl --kubeconfig=kubeconfig create namespace ${KUBE_NAMESPACE}"
+                        bat "kubectl --kubeconfig=kubeconfig create namespace %KUBE_NAMESPACE%"
                     } else {
                         echo "Namespace ${env.KUBE_NAMESPACE} already exists."
                     }
@@ -62,8 +62,8 @@ pipeline {
             steps {
                 script {
                     // Deploy to AKS
-                    sh '''
-                        kubectl --kubeconfig=kubeconfig apply -f job.yaml -n ${KUBE_NAMESPACE}
+                    bat '''
+                        kubectl --kubeconfig=kubeconfig apply -f job.yaml -n %KUBE_NAMESPACE%
                     '''
                 }
             }
