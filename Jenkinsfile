@@ -34,6 +34,19 @@ pipeline {
                 }
             }
         }
+        stage('Create Namespace') {
+            steps {
+                script {
+                    // Check if namespace exists, create if not
+                    def namespaceExists = sh(script: "kubectl get namespace $KUBE_NAMESPACE", returnStatus: true)
+                    if (namespaceExists != 0) {
+                        sh "kubectl create namespace $KUBE_NAMESPACE"
+                    } else {
+                        echo "Namespace $KUBE_NAMESPACE already exists."
+                    }
+                }
+            }
+        }
         stage('Deploy to AKS') {
             steps {
                 script {
