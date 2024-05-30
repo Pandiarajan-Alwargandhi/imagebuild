@@ -38,9 +38,9 @@ pipeline {
             steps {
                 script {
                     // Use Git Bash for the shell command
-                    def namespaceExists = sh(script: "kubectl get namespace ${KUBE_NAMESPACE}", returnStatus: true, shell: 'bash')
+                    def namespaceExists = sh(script: "kubectl get namespace ${KUBE_NAMESPACE}", returnStatus: true)
                     if (namespaceExists != 0) {
-                        sh "kubectl create namespace ${KUBE_NAMESPACE}", shell: 'bash'
+                        sh "kubectl create namespace ${KUBE_NAMESPACE}"
                     } else {
                         echo "Namespace ${KUBE_NAMESPACE} already exists."
                     }
@@ -54,7 +54,7 @@ pipeline {
                     sh '''
                         kubectl config use-context ${AKS_CLUSTER_NAME}
                         kubectl --kubeconfig=${KUBE_CONFIG} apply -f job.yaml -n ${KUBE_NAMESPACE}
-                    ''', shell: 'bash'
+                    '''
                 }
             }
         }
