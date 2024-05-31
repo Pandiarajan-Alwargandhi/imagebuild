@@ -1,4 +1,5 @@
 #!/bin/sh
+set -x
 
 # Authenticate with Azure
 az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $TENANT_ID
