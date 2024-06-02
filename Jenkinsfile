@@ -37,11 +37,13 @@ pipeline {
         }
         stage('Install Azure CLI and kubectl') {
             steps {
-                sh '''
-                # Install Azure CLI
-                curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+                bat '''
+                REM Install Azure CLI if not already installed
+                if not exist "%ProgramFiles(x86)%\\Microsoft SDKs\\Azure\\CLI2\\wbin" (
+                    powershell -Command "Start-Process msiexec.exe -ArgumentList '/i https://aka.ms/installazurecliwindows.msi /quiet' -NoNewWindow -Wait"
+                )
 
-                # Install kubectl
+                REM Install kubectl
                 az aks install-cli
                 '''
             }
@@ -59,18 +61,18 @@ pipeline {
                         """
                         writeFile file: 'azureCredentials.json', text: azureCredentials
                         
-                        sh '''#!/usr/bin/env bash
-                        # Authenticate with Azure
-                        az login --service-principal -u ${AZURE_CLIENT_ID} -p ${AZURE_CLIENT_SECRET} --tenant ${TENANT_ID}
+                        bat '''@echo off
+                        REM Authenticate with Azure
+                        az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant %TENANT_ID%
 
-                        # Get AKS credentials
-                        az aks get-credentials --resource-group ${RESOURCE_GROUP} --name ${AKS_CLUSTER_NAME} --file ${KUBECONFIG_FILE}
+                        REM Get AKS credentials
+                        az aks get-credentials --resource-group %RESOURCE_GROUP% --name %AKS_CLUSTER_NAME% --file %KUBECONFIG_FILE%
 
-                        # Create Namespace if not exists
-                        kubectl --kubeconfig=${KUBECONFIG_FILE} get namespace ${KUBE_NAMESPACE} || kubectl --kubeconfig=${KUBECONFIG_FILE} create namespace ${KUBE_NAMESPACE}
+                        REM Create Namespace if not exists
+                        kubectl --kubeconfig=%KUBECONFIG_FILE% get namespace %KUBE_NAMESPACE% || kubectl --kubeconfig=%KUBECONFIG_FILE% create namespace %KUBE_NAMESPACE%
 
-                        # Deploy to AKS
-                        kubectl --kubeconfig=${KUBECONFIG_FILE} apply -f job.yaml -n ${KUBE_NAMESPACE}
+                        REM Deploy to AKS
+                        kubectl --kubeconfig=%KUBECONFIG_FILE% apply -f job.yaml -n %KUBE_NAMESPACE%
                         '''
                     }
                 }
