@@ -9,7 +9,7 @@ pipeline {
         GIT_URL = 'https://github.com/Pandiarajan-Alwargandhi/imagebuild.git'
         DOCKER_IMAGE = 'artifactory.shs.saas.temenos.cloud:443/dockervirtual/testimages/hello-world-image'
         DOCKER_CREDENTIALS_ID = 'docker-registry-credentials-id'
-        AZURE_CREDENTIALS_ID = 'azure-service-principal-credentials-id'  // Replace with your Azure DevOps credentials ID
+        AZURE_CREDENTIALS_ID = 'aks-service-principal-credentials-id'
         KUBE_NAMESPACE = 'sanitytest'
         KUBECONFIG_FILE = 'kubeconfig'
     }
