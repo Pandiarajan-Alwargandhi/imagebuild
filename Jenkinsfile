@@ -61,6 +61,9 @@ pipeline {
                         REM Authenticate with Azure
                         az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant %TENANT_ID%
 
+                        REM Account Set
+                        az account set -s 154c599e-26ff-40dc-a4d4-f0bf217b5790
+
                         REM Check if AKS Cluster is available
                         az aks show --resource-group %RESOURCE_GROUP% --name %AKS_CLUSTER_NAME%
                         '''
