@@ -4,6 +4,7 @@ pipeline {
         string(name: 'AKS_CLUSTER_NAME', defaultValue: '', description: 'Name of the AKS cluster')
         string(name: 'RESOURCE_GROUP', defaultValue: '', description: 'Name of the Azure resource group')
         string(name: 'TENANT_ID', defaultValue: '', description: 'Azure Tenant ID')
+        string(name: 'SUBSCRIPTION_ID', defaultValue: '', description: 'Azure Subscription ID')
     }
     environment {
         GIT_URL = 'https://github.com/Pandiarajan-Alwargandhi/imagebuild.git'
@@ -55,17 +56,27 @@ pipeline {
                         bat '''@echo off
                         REM Output the tenant ID for diagnostics
                         echo Tenant ID: %TENANT_ID%
-                        echo AZURE_CLIENT_ID: %AZURE_CLIENT_ID%
-                        echo AZURE_CLIENT_SECRET: %AZURE_CLIENT_SECRET%
 
                         REM Authenticate with Azure
                         az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant %TENANT_ID%
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo Azure login failed
+                            exit /b 1
+                        )
 
-                        REM Account Set
-                        az account set -s 154c599e-26ff-40dc-a4d4-f0bf217b5790
+                        REM Set the subscription
+                        az account set --subscription %SUBSCRIPTION_ID%
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo Set subscription failed
+                            exit /b 1
+                        )
 
                         REM Check if AKS Cluster is available
                         az aks show --resource-group %RESOURCE_GROUP% --name %AKS_CLUSTER_NAME%
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo AKS cluster check failed
+                            exit /b 1
+                        )
                         '''
                     }
                 }
@@ -78,9 +89,24 @@ pipeline {
                         bat '''@echo off
                         REM Authenticate with Azure
                         az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant %TENANT_ID%
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo Azure login failed
+                            exit /b 1
+                        )
+
+                        REM Set the subscription
+                        az account set --subscription %SUBSCRIPTION_ID%
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo Set subscription failed
+                            exit /b 1
+                        )
 
                         REM Get AKS credentials
                         az aks get-credentials --resource-group %RESOURCE_GROUP% --name %AKS_CLUSTER_NAME% --file %KUBECONFIG_FILE%
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo Get AKS credentials failed
+                            exit /b 1
+                        )
                         '''
                     }
                 }
@@ -93,12 +119,31 @@ pipeline {
                         bat '''@echo off
                         REM Authenticate with Azure
                         az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant %TENANT_ID%
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo Azure login failed
+                            exit /b 1
+                        )
+
+                        REM Set the subscription
+                        az account set --subscription %SUBSCRIPTION_ID%
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo Set subscription failed
+                            exit /b 1
+                        )
 
                         REM Create Namespace if not exists
                         kubectl --kubeconfig=%KUBECONFIG_FILE% get namespace %KUBE_NAMESPACE% || kubectl --kubeconfig=%KUBECONFIG_FILE% create namespace %KUBE_NAMESPACE%
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo Create namespace failed
+                            exit /b 1
+                        )
 
                         REM Deploy Job to AKS
                         kubectl --kubeconfig=%KUBECONFIG_FILE% apply -f job.yaml -n %KUBE_NAMESPACE%
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo Deploy job failed
+                            exit /b 1
+                        )
                         '''
                     }
                 }
