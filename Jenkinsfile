@@ -9,7 +9,7 @@ pipeline {
         GIT_URL = 'https://github.com/Pandiarajan-Alwargandhi/imagebuild.git'
         DOCKER_IMAGE = 'artifactory.shs.saas.temenos.cloud:443/dockervirtual/testimages/hello-world-image'
         DOCKER_CREDENTIALS_ID = 'docker-registry-credentials-id'
-        AZURE_CREDENTIALS_ID = 'aks-service-principal-credentials-id'
+        AZURE_CREDENTIALS_ID = 'aks-service-principal-credentials-id'  // Replace with your Azure DevOps credentials ID
         KUBE_NAMESPACE = 'sanitytest'
         KUBECONFIG_FILE = 'kubeconfig'
     }
@@ -53,6 +53,11 @@ pipeline {
                 withCredentials([azureServicePrincipal(credentialsId: env.AZURE_CREDENTIALS_ID)]) {
                     script {
                         bat '''@echo off
+                        REM Output the tenant ID for diagnostics
+                        echo Tenant ID: %TENANT_ID%
+                        echo AZURE_CLIENT_ID: %AZURE_CLIENT_ID%
+                        echo AZURE_CLIENT_SECRET: %AZURE_CLIENT_SECRET%
+
                         REM Authenticate with Azure
                         az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant %TENANT_ID%
 
