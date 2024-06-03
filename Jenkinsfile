@@ -9,7 +9,7 @@ pipeline {
         GIT_URL = 'https://github.com/Pandiarajan-Alwargandhi/imagebuild.git'
         DOCKER_IMAGE = 'artifactory.shs.saas.temenos.cloud:443/dockervirtual/testimages/hello-world-image'
         DOCKER_CREDENTIALS_ID = 'docker-registry-credentials-id'
-        AZURE_CREDENTIALS_ID = 'aks-service-principal-credentials-id'
+        AZURE_CREDENTIALS_ID = 'azure-service-principal-credentials-id'  // Replace with your Azure DevOps credentials ID
         KUBE_NAMESPACE = 'sanitytest'
         KUBECONFIG_FILE = 'kubeconfig'
     }
@@ -48,30 +48,48 @@ pipeline {
                 '''
             }
         }
-        stage('Deploy to AKS') {
+        stage('Check AKS Cluster Availability') {
             steps {
                 withCredentials([azureServicePrincipal(credentialsId: env.AZURE_CREDENTIALS_ID)]) {
                     script {
-                        def azureCredentials = """
-                        {
-                            "clientId": "${env.AZURE_CLIENT_ID}",
-                            "clientSecret": "${env.AZURE_CLIENT_SECRET}",
-                            "tenantId": "${env.TENANT_ID}"
-                        }
-                        """
-                        writeFile file: 'azureCredentials.json', text: azureCredentials
-                        
+                        bat '''@echo off
+                        REM Authenticate with Azure
+                        az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant %TENANT_ID%
+
+                        REM Check if AKS Cluster is available
+                        az aks show --resource-group %RESOURCE_GROUP% --name %AKS_CLUSTER_NAME%
+                        '''
+                    }
+                }
+            }
+        }
+        stage('Get AKS Credentials') {
+            steps {
+                withCredentials([azureServicePrincipal(credentialsId: env.AZURE_CREDENTIALS_ID)]) {
+                    script {
                         bat '''@echo off
                         REM Authenticate with Azure
                         az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant %TENANT_ID%
 
                         REM Get AKS credentials
                         az aks get-credentials --resource-group %RESOURCE_GROUP% --name %AKS_CLUSTER_NAME% --file %KUBECONFIG_FILE%
+                        '''
+                    }
+                }
+            }
+        }
+        stage('Deploy Job to AKS') {
+            steps {
+                withCredentials([azureServicePrincipal(credentialsId: env.AZURE_CREDENTIALS_ID)]) {
+                    script {
+                        bat '''@echo off
+                        REM Authenticate with Azure
+                        az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant %TENANT_ID%
 
                         REM Create Namespace if not exists
                         kubectl --kubeconfig=%KUBECONFIG_FILE% get namespace %KUBE_NAMESPACE% || kubectl --kubeconfig=%KUBECONFIG_FILE% create namespace %KUBE_NAMESPACE%
 
-                        REM Deploy to AKS
+                        REM Deploy Job to AKS
                         kubectl --kubeconfig=%KUBECONFIG_FILE% apply -f job.yaml -n %KUBE_NAMESPACE%
                         '''
                     }
