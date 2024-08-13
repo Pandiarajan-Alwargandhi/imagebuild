@@ -1,3 +1,4 @@
+import os
 import uuid
 import datetime
 from azure.identity import ClientSecretCredential
@@ -9,11 +10,15 @@ from azure.mgmt.storage import StorageManagementClient
 from azure.mgmt.containerservice import ContainerServiceClient
 from azure.storage.fileshare import ShareServiceClient
 
-# Define variables
-subscription_id = '154c599e-26ff-40dc-a4d4-f0bf217b5790'
-tenant_id = 'd5d2540f-f60a-45ad-86a9-e2e792ee6669'
-client_id = '95640cb2-fea1-4333-aff4-65f702b99242'
-client_secret = ''
+# Fetch credentials from environment variables
+subscription_id = os.getenv('AZURE_SUBSCRIPTION_ID')
+tenant_id = os.getenv('AZURE_TENANT_ID')
+client_id = os.getenv('AZURE_CLIENT_ID')
+client_secret = os.getenv('AZURE_CLIENT_SECRET')
+
+if not all([subscription_id, tenant_id, client_id, client_secret]):
+    raise EnvironmentError("One or more Azure credentials are not set in the environment variables.")
+
 location = 'eastus'
 tags = {
     'DateOfCommission': datetime.datetime.now().strftime("%Y-%m-%d"),
@@ -199,10 +204,6 @@ storage_account = create_storage_account(storage_client, resource_group_name, st
 
 file_share_name = 'tafjud'
 create_file_share(storage_client, resource_group_name, storage_account_name, file_share_name)
-
-# Create Folders from text document
-# folders = ['folder1', 'folder2']  # Example folders
-# create_folders_in_file_share(storage_account_name, file_share_name, folders)
 
 # Container Service Client
 aks_client = ContainerServiceClient(credential, subscription_id)
