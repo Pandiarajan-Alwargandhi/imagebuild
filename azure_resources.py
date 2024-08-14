@@ -121,6 +121,8 @@ def create_storage_account(storage_client, resource_group_name, storage_account_
             'kind': 'StorageV2',
             'tags': tags,
             'properties': {
+                'publicNetworkAccess': 'Disabled',  # Disable public network access
+                'allowBlobPublicAccess': False,  # Explicitly deny blob public access
                 'networkAcls': {
                     'bypass': 'AzureServices',
                     'virtualNetworkRules': [
@@ -133,7 +135,7 @@ def create_storage_account(storage_client, resource_group_name, storage_account_
             }
         }
         storage_account = storage_client.storage_accounts.begin_create(resource_group_name, storage_account_name, storage_params).result()
-        print(f"Storage account '{storage_account_name}' created with restricted network access.")
+        print(f"Storage account '{storage_account_name}' created with restricted network access and no public blob access.")
         return storage_account
     except Exception as e:
         print(f"Failed to create storage account: {e}")
