@@ -113,16 +113,27 @@ def create_key_vault(key_vault_client, resource_group_name, kv_name):
         print(f"Failed to create key vault: {e}")
         exit(1)
 
-def create_storage_account(storage_client, resource_group_name, storage_account_name):
+def create_storage_account(storage_client, resource_group_name, storage_account_name, vnet_name, subnet_name):
     try:
         storage_params = {
             'location': location,
             'sku': {'name': 'Standard_LRS'},
             'kind': 'StorageV2',
-            'tags': tags
+            'tags': tags,
+            'properties': {
+                'networkAcls': {
+                    'bypass': 'AzureServices',
+                    'virtualNetworkRules': [
+                        {
+                            'id': f'/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Network/virtualNetworks/{vnet_name}/subnets/{subnet_name}'
+                        }
+                    ],
+                    'defaultAction': 'Deny'
+                }
+            }
         }
         storage_account = storage_client.storage_accounts.begin_create(resource_group_name, storage_account_name, storage_params).result()
-        print(f"Storage account '{storage_account_name}' created.")
+        print(f"Storage account '{storage_account_name}' created with restricted network access.")
         return storage_account
     except Exception as e:
         print(f"Failed to create storage account: {e}")
@@ -200,7 +211,7 @@ create_key_vault(key_vault_client, resource_group_name, kv_name)
 # Storage Management Client
 storage_client = StorageManagementClient(credential, subscription_id)
 storage_account_name = f'sa{unique_id}'
-storage_account = create_storage_account(storage_client, resource_group_name, storage_account_name)
+storage_account = create_storage_account(storage_client, resource_group_name, storage_account_name, vnet_name, subnet_name)
 
 file_share_name = 'tafjud'
 create_file_share(storage_client, resource_group_name, storage_account_name, file_share_name)
