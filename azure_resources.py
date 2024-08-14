@@ -72,9 +72,12 @@ def create_virtual_network(network_client, resource_group_name, vnet_name, custo
 
 def create_subnet(network_client, resource_group_name, vnet_name, subnet_name):
     try:
-        subnet_params = {'address_prefix': '10.4.0.0/24'}
+        subnet_params = {
+            'address_prefix': '10.4.0.0/24',
+            'service_endpoints': [{'service': 'Microsoft.Storage'}]  # Add service endpoint
+        }
         subnet_result = network_client.subnets.begin_create_or_update(resource_group_name, vnet_name, subnet_name, subnet_params).result()
-        print(f"Subnet '{subnet_name}' created.")
+        print(f"Subnet '{subnet_name}' created with Microsoft.Storage service endpoint.")
         return subnet_result
     except Exception as e:
         print(f"Failed to create subnet: {e}")
