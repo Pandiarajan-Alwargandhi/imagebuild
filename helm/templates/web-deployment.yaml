@@ -1,0 +1,187 @@
+{{- $mountPath := .Values.mount.path -}}
+{{- $fiShareName := "tafjud" -}}
+{{- $dot := . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "transact.fullname" . }}{{ "-web" }}
+  labels:
+    app.kubernetes.io/name: {{ include "transact.name" . }}{{ "-web" }}
+    helm.sh/chart: {{ include "transact.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+{{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.webReplicaCount }}
+{{- end }}
+  selector:
+    matchLabels:
+      {{- include "web.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "web.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if eq .Values.environment "eks" }}
+      serviceAccountName: {{ include "serviceaccount.web.name" . | quote }}
+      {{- end }}
+      {{- if .Values.image.pullSecret }}
+      imagePullSecrets:
+      - name: {{ .Values.image.pullSecret }}
+      {{- end }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - {{ include "transact.name" . }}{{ "-web" }}
+              topologyKey: topology.kubernetes.io/zone
+            weight: 100
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - {{ include "transact.name" . }}{{ "-web" }}
+              topologyKey: topology.kubernetes.io/hostname
+            weight: 100
+      containers:
+      - name: {{ .Chart.Name }}
+        image: {{ include "web.image" . | quote }}
+        imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+        envFrom:
+        - configMapRef:
+            name: jboss-config
+        env:
+        {{- if .Values.keycloak.enabled }}    
+        - name: KC_ISSUER
+          value: {{ .Values.keycloak.issuer | quote }}
+        - name: KC_AUTHZENDPOINT
+          value: {{ .Values.keycloak.authzendpoint | quote }}
+        - name: KC_TOKENENDPOINT
+          value: {{ .Values.keycloak.tokenendpoint | quote }}
+        - name: KC_LOGOUTENDPOINT
+          value: {{ .Values.keycloak.logoutendpoint | quote }}                 
+        - name: KC_REDIRECTURI
+          value: {{ .Values.keycloak.redirecturi | quote }}
+        - name: KC_PRINCIPALCLAIM
+          value: {{ .Values.keycloak.principalclaim | quote }}
+        - name: KC_CLIENTID
+          value: {{ .Values.keycloak.clientid | quote }}
+        - name: KC_PKENCODED
+          valueFrom:
+            secretKeyRef:
+              name: externals
+              key: keycloakpkencoded
+        - name: KC_CLIENTSECRET
+          valueFrom:
+            secretKeyRef:
+              name: externals
+              key: keycloakclientsecret
+        {{- end }}
+        - name: JMS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: transact-config
+              key: jmsurl
+        - name: JMS_USER
+          valueFrom:
+            configMapKeyRef:
+              name: transact-config
+              key: jmsuser
+        {{- if .Values.mq.password }}
+        - name: JMS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: externals
+              key: jms_password
+        {{- end }}
+        - name: JBOSS_PWD
+          valueFrom:
+            secretKeyRef:
+              name: externals
+              key: jbossAdminPassword
+        - name: WWW_PORT
+          value: "8080"
+        - name: JAVA_OPTS
+          value: {{ include "java.opts.web" . | quote }}
+        - name: BRP_HOME
+          value: "/srv/Temenos"
+        # uxp logs
+        - name: LOG_HOME
+          value: "/srv/Temenos"
+        - name: EDGE_PROP
+          value: {{ .Values.edgeProp | default "SystemTestProperties" }}
+        - name: TE_TB_SERVER_URL
+          value: {{ .Values.app.tburl | quote }}
+        {{- if .Values.ssl.enabled }}
+        - name: SSL_FILENAME
+          valueFrom:
+            configMapKeyRef:
+              name: transact-config
+              key: ssl_filename
+        - name: SSL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: externals
+              key: ssl_password
+        {{- end }}
+        {{- with .Values.env }}
+          {{- toYaml . | nindent 10 }}
+        {{- end }}              
+        resources:
+          requests:
+            cpu: {{ .Values.requests.web.cpu }}
+            memory: {{ .Values.requests.web.memory }}
+          limits:
+            cpu: {{ .Values.limits.web.cpu }}
+            memory: {{ .Values.limits.web.memory }}
+        ports:
+        - name: web
+          containerPort: 8080
+          protocol: TCP
+        {{- if .Values.ssl.enabled }}
+        - name: https
+          containerPort: 8443
+          protocol: TCP
+        {{- end }} 
+        readinessProbe:
+          httpGet:
+            path: /
+            {{- if .Values.ssl.enabled }}
+            port: 8443
+            scheme: HTTPS
+            {{- else }}
+            port: 8080
+            {{- end }}
+          periodSeconds: 30
+          timeoutSeconds: 30
+        volumeMounts:
+        {{- if .Values.ssl.enabled }}
+          - name: ssl-cert
+            mountPath: {{ "/opt/jboss/wildfly/standalone/configuration/" }}{{ .Values.ssl.filename }}
+            subPath: {{ .Values.ssl.filename }}
+        {{- end }}
+        {{- if .Values.deployFI.enabled }}
+          - name: {{ $fiShareName }}
+            mountPath: {{ $mountPath }}{{ $fiShareName }}
+        {{- end }}
+      volumes:
+      {{- if .Values.ssl.enabled }}
+        - name: ssl-cert
+          secret:
+            secretName: ssl-secret
+      {{- end }}
+      {{- if .Values.deployFI.enabled }}
+        - name: {{ $fiShareName }}
+          azureFile:
+            secretName: {{ include "transact.name" $dot }}{{ "-secret" }}
+            shareName: {{ $fiShareName }}
+            readOnly: false
+      {{- end }}

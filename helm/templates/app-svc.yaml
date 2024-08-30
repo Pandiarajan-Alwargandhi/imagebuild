@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "transact.fullname" . }}{{ "-app-svc" }}
+  labels:
+    app.kubernetes.io/name: {{ include "transact.name" . }}
+    helm.sh/chart: {{ include "transact.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.service.port | default 80 }}
+      targetPort: app
+      protocol: TCP
+    {{- if .Values.jboss.console.exposed }}
+    - name: console
+      port: {{ .Values.jboss.console.port | default 9990 }}
+      targetPort: console
+      protocol: TCP
+    {{- end }}
+    {{- if .Values.ssl.enabled }}
+    - name: https
+      port: 8443
+      targetPort: 8443
+      protocol: TCP
+    {{- end }}
+  selector:
+    {{- include "app.selectorLabels" . | nindent 4 }}

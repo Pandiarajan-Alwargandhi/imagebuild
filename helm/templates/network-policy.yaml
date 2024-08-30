@@ -1,0 +1,405 @@
+{{- if eq .Values.component.name "transact" }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "transact.fullname" . }}{{ "-policy-deny-all" }}
+  labels:
+    app.kubernetes.io/name: {{ include "transact.name" . }}
+    helm.sh/chart: {{ include "transact.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: {{ include "transact.fullname" . }}{{ "-policy-web" }}
+  labels:
+    app.kubernetes.io/name: {{ include "transact.name" . }}
+    helm.sh/chart: {{ include "transact.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  policyTypes:
+    - Ingress
+    - Egress
+  podSelector:
+    matchLabels:
+      {{- include "web.selectorLabels" . | nindent 6 }}
+  ingress:
+  # Allow external HTTP
+  - ports:
+    - port: 8080
+    {{- if .Values.ssl.enabled }}
+    - port: 8443
+    {{- end }}
+    from: []
+  egress:
+  # Allow AMQ
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: activemq
+
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+  # Allow App
+  - to:
+    - podSelector:
+        matchLabels:
+          {{- include "app.selectorLabels" . | nindent 10 }}
+  {{- if .Values.gremlinIPblock }}
+  - to:
+    {{- range $_, $ip := .Values.gremlinIPblock }}
+    - ipBlock:
+        cidr: {{ $ip }}/32
+    {{- end }}
+  {{- end }}
+
+  # Allow External IP
+  - to:
+    ports:
+      - port: 2579
+        protocol: TCP
+      # 443 is needed for DSF      
+      - port: 443
+        protocol: TCP
+      # Allow external DNS for AmazonMQ
+      - protocol: TCP
+        port: 53
+      - protocol: UDP
+        port: 53
+      # SSL MQ Port
+      - protocol: TCP
+        port: 61617
+
+  # Allow AWS & Azure metadata service egress for cloud.sh script
+  - to:
+    - ipBlock:
+        cidr: 169.254.169.254/32
+---
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: {{ include "transact.fullname" . }}{{ "-policy-app" }}
+  labels:
+    app.kubernetes.io/name: {{ include "transact.name" . }}
+    helm.sh/chart: {{ include "transact.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  policyTypes:
+    - Ingress
+    - Egress
+  podSelector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+  ingress:
+  # Allow external HTTP
+  - ports:
+    - port: 8080
+    {{- if .Values.ssl.enabled }}
+    - port: 8443
+    {{- end }}
+    - port: 8370
+    - port: 8377
+    from: []
+  egress:
+  # Allow AMQ
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: activemq
+    ports:
+      - port: {{ .Values.mq.port | default 61616 }}
+        protocol: TCP
+
+  - to:
+    - podSelector:
+       matchLabels:
+         {{- include "api.selectorLabels" . | nindent 10 }}
+
+  # Allow Nuodb
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: nuodb
+    ports:
+      - port: 48004
+        protocol: TCP
+      - port: 48006
+        protocol: TCP
+
+  # Allow SQL MI
+  - to: 
+    ports:
+      - port: {{ .Values.database.port | default 1433 }}
+        protocol: TCP
+
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+  - to:
+    ports:
+    # Allow external DNS for AmazonMQ
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+    # SSL MQ Port
+    - protocol: TCP
+      port: 61617
+  {{- if .Values.gremlinIPblock }}
+  - to:
+    {{- range $_, $ip := .Values.gremlinIPblock }}
+    - ipBlock:
+        cidr: {{ $ip }}/32
+    {{- end }}
+  {{- end }}
+
+  # Allow External IP
+  - to:
+    ports:
+      - port: 2579
+        protocol: TCP
+      #443 is needed for TAFJRestServices        
+      - port: 443
+        protocol: TCP
+      - port: 4560
+        protocol: TCP
+
+  # Allow AWS & Azure metadata service egress for cloud.sh script
+  - to:
+    - ipBlock:
+        cidr: 169.254.169.254/32
+    ports:
+    - protocol: TCP
+      port: 80
+---
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: {{ include "transact.fullname" . }}{{ "-policy-api" }}
+  labels:
+    app.kubernetes.io/name: {{ include "transact.name" . }}
+    helm.sh/chart: {{ include "transact.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  policyTypes:
+    - Ingress
+    - Egress
+  podSelector:
+    matchLabels:
+      {{- include "api.selectorLabels" . | nindent 6 }}
+  ingress:
+  # Allow external HTTP
+  - ports:
+    {{- if .Values.ssl.enabled }}
+    - port: 8443
+    {{- end }}
+    - port: 8080
+    from: []
+  egress:
+  #Allow AMQ
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: activemq
+  
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  
+  {{- if .Values.gremlinIPblock }}
+  - to:
+    {{- range $_, $ip := .Values.gremlinIPblock }}
+    - ipBlock:
+        cidr: {{ $ip }}/32
+    {{- end }}
+  {{- end }}
+
+  # Allow External IP
+  - to:
+    ports:
+      - port: 2579
+        protocol: TCP
+      - port: 443
+        protocol: TCP
+      - port: 80
+        protocol: TCP
+      # Allow external DNS for AmazonMQ
+      - protocol: TCP
+        port: 53
+      - protocol: UDP
+        port: 53
+      # SSL MQ Port
+      - protocol: TCP
+        port: 61617
+  
+  # Allow AWS & Azure metadata service egress for cloud.sh script
+  - to:
+    - ipBlock:
+        cidr: 169.254.169.254/32
+---
+{{- if .Values.deployATM.enabled }}  # ATM framework
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: {{ include "transact.fullname" . }}{{ "-policy-iso" }}
+  labels:
+    app.kubernetes.io/name: {{ include "transact.name" . }}
+    helm.sh/chart: {{ include "transact.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  policyTypes:
+    - Ingress
+    - Egress
+  podSelector:
+    matchLabels:
+      {{- include "iso.selectorLabels" . | nindent 6 }}
+  ingress:
+  # Allow external HTTP
+  - ports:
+    - port: 8080
+    {{- if .Values.ssl.enabled }}
+    - port: 8443
+    - port: 7006
+    {{- end }}
+    from: []
+  egress:
+  # Allow AMQ
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: activemq
+
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+  #Allow App
+  - to:
+    - podSelector:
+        matchLabels:
+          {{- include "app.selectorLabels" . | nindent 10 }}
+  {{- if .Values.gremlinIPblock }}
+  - to:
+    {{- range $_, $ip := .Values.gremlinIPblock }}
+    - ipBlock:
+        cidr: {{ $ip }}/32
+    {{- end }}
+  {{- end }}
+
+  # Allow External IP
+  - to:
+    ports:
+      - port: 2579
+        protocol: TCP
+      # 443 is needed for DSF
+      - port: 443
+        protocol: TCP
+      # SSL MQ Port
+      - protocol: TCP
+        port: 61617
+
+  # Allow AWS & Azure metadata service egress for cloud.sh script
+  - to:
+    - ipBlock:
+        cidr: 169.254.169.254/32
+{{- end }}
+---
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: {{ include "transact.fullname" . }}{{ "-policy-logstash" }}
+  labels:
+    app.kubernetes.io/name: {{ include "transact.name" . }}
+    helm.sh/chart: {{ include "transact.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  policyTypes:
+    - Ingress
+    - Egress
+  podSelector:
+    matchLabels:
+      {{- include "logstash.selectorLabels" . | nindent 6 }}
+  ingress:
+  # Allow external HTTP
+  - ports:
+    - port: 4560
+    from: []
+  egress:
+  # Allow ElasticSearch
+  - to:
+    ports:
+      - port: 9200
+        protocol: TCP
+
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+  # Allow AWS & Azure metadata service egress for cloud.sh script
+  - to:
+    - ipBlock:
+        cidr: 169.254.169.254/32
+{{- end }}
