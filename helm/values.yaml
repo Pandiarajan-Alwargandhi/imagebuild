@@ -1,0 +1,183 @@
+nameOverride: "" # (Optional) Override default chart name
+fullnameOverride: "" # (Optional) Override full default chart name
+
+# Financial Inclusion
+deployFI:
+  enabled: false # Deploy Temenos Financial Inclusion
+
+# ATM Framework
+deployATM:
+  enabled: false # Deploy Temenos ATM Framework
+
+appReplicaCount: 1 # Transact app pod replicas
+webReplicaCount: 1 # Transact web pod replicas 
+apiReplicaCount: 1 # Transact API pod replicas
+edgeProp: SystemTestProperties # Configuration modes for UXP Browser. Accepted values: SystemTestProperties, ProductionProperties
+
+appVersion: "" # (Optional) Transact version to be used in all image tags in the format {.Values.image.app.repository}:{.Values.image.app.version.}.{.Values.image.app.tag}
+domainname: "" # Environment domain name used for AGIC
+environment: "rke" # Deployment environment. Accepted values: aks, eks, iks, roks, rcr - for Azure Kubernetes Service ,AWS Elastic Kubernetes Service, IBM Kubernetes Service and Redhat Openshift Kubernetes service respectively.
+
+
+serviceAccount:
+  app: "" # Transact app service account. If value is blank, the service account will be created. To use an existing service account, set the name here.
+  web: "" # Transact web service account. If value is blank, the service account will be created. To use an existing service account, set the name here.
+  api: "" # Transact API service account. If value is blank, the service account will be created. To use an existing service account, set the name here.
+
+image:
+  pullPolicy: "" # Pull policy for images Accepted Values | IfNotPresent | Always
+  pullSecret: "" # (Optional) Image pull secret.
+  app:
+    repository: "" # App image repository.
+    tag: ""  # App image tag.
+  web:
+    repository: "" # Web image repository.
+    tag: "" # Web image tag.
+  api:
+    repository: "" # API image repository.
+    tag: "" # API image tag.
+
+tafjee:
+  OLTP_ACTIVE: "true" # Online transaction processing active. true dictates that this Transact instance will serve the frontend applications. false will make it a Transact batch pod.
+  SERVICE_ACTIVE: "false" # Run the Transact pod as a batch service.
+
+apiIp: "" # (Optional) Set the API load balancer IP address.
+
+config:
+  name: "" # Resource prefix
+
+component:
+  name: "" # Specifies the Temenos component. Accepted values: transact, lending. Setting this will apply custom network policies with a default deny-all posture.
+
+database:
+  type: "" # Database Type: Accepted Values | AzureSQL | PostgreSQL | PostgreSQLawsWrapper | Yugabyte | Oracle
+  user: "" # Databse username
+  password: "" # Databse password - not required if using the PostgreSQLawsWrapper database option.
+  host: "" # Database hostname.
+  encryptedPassword: "" # Encrypted database password value generated using the EncryptionUtility JAR found in the UXPB Tools package. Required if UXP is deployed and the PostgreSQLawsWrapper database type is not being used.
+  port:  # Database port number
+  database: "" # Database schema name
+
+mq: 
+  connectionstring: 
+  user: "" # ActiveMQ user
+  password: "" # ActiveMQ password
+
+app:
+  user: "SSOUSER1" # Transact username for UXP artefact connectivity
+  password: "123456" # Transact user password for UXP artefact connectivity
+  IDLE_TIMEOUT_VALUE: "1"
+  tburl: ""
+  
+service:
+  port: 8080 # WildFly HTTP port
+  httpsPort: 8443 # WildFly HTTPS port
+
+requests:
+  app:
+    cpu: "1.5"
+    memory: "7G"
+  web: 
+    cpu: "1"
+    memory: "6G"
+  api: 
+    cpu: "1.5"
+    memory: "6G"
+limits:
+  app: 
+    cpu: "1.5"
+    memory: "7G"
+  web:
+    cpu: "1"
+    memory: "6G"
+  api:
+    cpu: "2"
+    memory: "12G"
+
+ingress:
+  enabled: true # Deploy ingress to expose Transact services externally from the cluster
+  controller: "" # Ingress controller to expose the Transact services. Accepted values | awsalbcontroller | nginx |  agic |
+  usePrivateIp: true
+  hosts: ""
+  annotations: {} # Additional custom annotations for the ingress/ingress controller.
+  tls:
+  - hosts: 
+#    - ""
+    secretName: ""
+  paths:
+  - path: /BrowserWeb*
+    service: "-svc"
+  - path: /TAFJ*
+    service: "-app-svc"
+  - path: /Browser*
+    service: "-svc"
+  - path: /irf*
+    service: "-lb"
+  - path: /infinity*
+    service: "-lb"
+  - path: /axis2*
+    service: "-app-svc"
+  - path: /TAFJCobMonitor*
+    service: "-app-svc"
+  - path: /transact-explorer-wa*
+    service: "-svc"
+  - path: /tb-server*
+    service: "-app-svc"
+
+autoscaling:
+  enabled: false # Enable autoscaling for the Transact pods using the Horizontal Pod Autoscaler
+  minReplicas: 1 # Minimum number of Transact pods if autoscaling is enabled
+  maxReplicas: 5 # Maximum number of Transact pods if autoscaling is enabled
+  targetCPUUtilizationPercentage: 75 # Pod CPU utilisation value at which more replicas will be created to distribute load.
+
+  
+share:
+  names: ""
+
+mount:
+  path: "/shares/"
+
+
+eventstream:
+  jaas_config: ""
+  server_config: ""
+
+jboss:
+  MDB_POOL_MAX: "6" # Maximum MDB pool size.
+  DB_POOL_MIN: "10" # Minimum database pool size
+  DB_POOL_MAX: "100" # Maximum database pool size
+  MAX_POOL_SIZE: "200" # JMS Connection factory pool size
+  JBOSS_PWD: "admin" # Password for application server console admin user
+  console:
+    exposed: true # Expose the application server console port in the app
+
+uxp:
+  debugLogs: false # Enable UXP debug logs
+
+ssl:
+  enabled: false # Use SSL for the Transact deployments.
+  filename: "" # SSL certificate file name present in the ssl directory within this chart.
+  password: "" # SSL certificate password
+  rootCertName: "" # SSL certificate root certificate name
+
+redis:
+  enabled: false # Use Redis for the TAFJ cache.
+  host: "" # Redis hostname
+  keys: "" # Redis password
+
+keycloak:
+  api:
+    enabled: false # Enable Keycloak for the API deployment
+  enabled: false # Enable Keycloak for Transact web and app
+  pkencoded: "" # Base64 encoded Keycloak Transact realm public key
+  clientsecret: ""
+  redirecturi: ""
+  issuer: "" # Keycloak Transact realm URL
+  clientid: "" # ID of UXP Browser client in KeyCloak
+  principalclaim: "" # Name of Transact sign-on-name user attribute in Keycloak
+  tokenendpoint: "" # Keycloak transact realm token end point URL
+  pkcertencoded: ""
+  authzendpoint: "" # Keycloak Transact realm authorization end point URL
+  logoutendpoint: ""
+  pkjwksuri: ""
+
