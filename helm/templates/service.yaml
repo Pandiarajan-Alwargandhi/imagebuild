@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "transact.fullname" . }}{{ "-svc" }}
+  labels:
+    app.kubernetes.io/name: {{ include "transact.name" . }}
+    helm.sh/chart: {{ include "transact.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.service.port | default 80 }}
+      targetPort: web
+      protocol: TCP
+    {{- if .Values.ssl.enabled }}
+    - name: https
+      port: {{ .Values.service.httpsPort | default 443 }}
+      targetPort: 8443
+      protocol: TCP
+    {{- end }}
+  selector:
+    {{- include "web.selectorLabels" . | nindent 4 }}
+---
+{{- if .Values.deployATM.enabled }}   #This file is used to deploy ATM framework and it is meant to be client specific requirement.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "transact.fullname" . }}{{ "-lb-svc" }}
+  labels:
+    app.kubernetes.io/name: {{ include "transact.name" . }}
+    helm.sh/chart: {{ include "transact.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"  
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 7006
+      targetPort: 7006
+      protocol: TCP
+  selector:
+    {{- include "iso.selectorLabels" . | nindent 4 }}
+{{- end }}

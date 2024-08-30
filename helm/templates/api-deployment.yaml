@@ -1,0 +1,155 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "transact.fullname" . }}{{ "-api" }}
+  labels:
+    app.kubernetes.io/name: {{ include "transact.name" . }}{{ "-api" }}
+    helm.sh/chart: {{ include "transact.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+{{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.apiReplicaCount }}
+{{- end }}
+  selector:
+    matchLabels:
+      {{- include "api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "api.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if eq .Values.environment "eks" }}
+      serviceAccountName: {{ include "serviceaccount.api.name" . | quote }}
+      {{- end }}
+      {{- if .Values.image.pullSecret }}
+      imagePullSecrets:
+      - name: {{ .Values.image.pullSecret }}
+      {{- end }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - {{ include "transact.name" . }}{{ "-api" }}
+              topologyKey: topology.kubernetes.io/zone
+            weight: 100
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - {{ include "transact.name" . }}{{ "-api" }}
+              topologyKey: topology.kubernetes.io/hostname
+            weight: 100
+      containers:
+      - name: {{ .Chart.Name }}
+        image: {{ include "api.image" . | quote }}
+        imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+        envFrom:
+        - configMapRef:
+            name: jboss-config
+        env:
+        {{- if .Values.keycloak.api.enabled }}
+        - name: KC_ISSUER
+          value: {{ .Values.keycloak.issuer | quote }}
+        - name: KC_PKJWKSURI
+          value: {{ .Values.keycloak.pkjwksuri | quote }} 
+        - name: KC_PRINCIPALCLAIM
+          value: {{ .Values.keycloak.principalclaim | quote }}
+        - name: KC_PKCERTENCODED
+          value: {{ .Values.keycloak.pkcertencoded | quote }}
+        {{- end }} 
+        - name: JMS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: transact-config
+              key: jmsurl
+        - name: JMS_USER
+          valueFrom:
+            configMapKeyRef:
+              name: transact-config
+              key: jmsuser
+        {{- if .Values.mq.password }}
+        - name: JMS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: externals
+              key: jms_password
+        {{- end }}
+        - name: JBOSS_PWD
+          valueFrom:
+            secretKeyRef:
+              name: externals
+              key: jbossAdminPassword
+        - name: ENV_PREFIX
+          valueFrom:
+            configMapKeyRef:
+              name: transact-config
+              key: envprefix
+        - name: WWW_PORT
+          value: "8080"
+        - name: LOG_HOME
+          value: /opt
+        - name: JAVA_OPTS
+          value: {{ include "java.opts.api" . | quote }}
+        {{- if .Values.ssl.enabled }}
+        - name: SSL_FILENAME
+          valueFrom:
+            configMapKeyRef:
+              name: transact-config
+              key: ssl_filename
+        - name: SSL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: externals
+              key: ssl_password
+        {{- end }}
+        {{- with .Values.env }}
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        resources:
+          requests:
+            cpu: {{ .Values.requests.api.cpu }}
+            memory: {{ .Values.requests.api.memory }}
+          limits:
+            cpu: {{ .Values.limits.api.cpu }}
+            memory: {{ .Values.limits.api.memory }}
+        ports:
+        - name: api
+          containerPort: 8080
+          protocol: TCP
+        {{- if .Values.ssl.enabled }}
+        - name: https
+          containerPort: 8443
+          protocol: TCP
+        {{- end }}
+        readinessProbe:
+          httpGet:
+            path: /
+            {{- if .Values.ssl.enabled }}
+            port: 8443
+            scheme: HTTPS
+            {{- else }}
+            port: 8080
+            {{- end }}
+          periodSeconds: 30
+          timeoutSeconds: 30
+        volumeMounts:
+          {{- if .Values.ssl.enabled }}
+          - name: ssl-cert
+            mountPath: {{ "/opt/jboss/wildfly/standalone/configuration/" }}{{ .Values.ssl.filename }}
+            subPath: {{ .Values.ssl.filename }}
+          {{- end }}
+      volumes:
+        {{- if .Values.ssl.enabled }}
+        - name: ssl-cert
+          secret:
+            secretName: ssl-secret
+        {{- end }}

@@ -1,0 +1,4 @@
+*.zip
+# don't commit environment values files
+values-aws-*.yaml
+values-azure-*.yaml

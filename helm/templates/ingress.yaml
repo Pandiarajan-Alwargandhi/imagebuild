@@ -1,0 +1,102 @@
+{{- if .Values.ingress.enabled -}}
+{{ $portName := ternary "https" "http" .Values.ssl.enabled -}}
+{{- $fullName := include "transact.fullname" . -}}
+{{- if semverCompare ">=1.14-0" .Capabilities.KubeVersion.GitVersion -}}
+apiVersion: networking.k8s.io/v1
+{{- else -}}
+apiVersion: networking.k8s.io/v1
+{{- end }}
+{{- if eq .Values.environment "roks" }}
+apiVersion: networking.k8s.io/v1
+{{- end }}
+{{- if eq .Values.environment "iks" }}
+apiVersion: networking.k8s.io/v1
+{{- end }}
+kind: Ingress
+metadata:
+  name: {{ $fullName }}{{ "-ing" }}
+  labels:
+    app.kubernetes.io/name: {{ include "transact.name" . }}
+    helm.sh/chart: {{ include "transact.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    {{- if eq .Values.ingress.controller "nginx" }}
+    spec.ingressClassName: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    {{- if .Values.ingress.deploywaf }}
+    nginx.ingress.kubernetes.io/enable-modsecurity: "false"
+    nginx.ingress.kubernetes.io/modsecurity-snippet: |
+      Include /etc/nginx/owasp-modsecurity-crs/nginx-modsecurity.conf
+      SecRuleEngine On
+      SecRuleRemoveById 920210 920230 920420 920440 920350 930120 930100 930110 941331 941130 941150 941160 941340 942370 942360 942330 942340 942260 942200 942120 942110 942430 942190 942380 942440 932100 931130
+    {{- end }}
+    {{- if .Values.autoscaling.enabled }}
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-path: "/"
+    {{- end }}
+    {{- if .Values.ssl.enabled }}
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    {{- end }}
+    {{- end }}
+    {{- if eq .Values.ingress.controller "agic" }}
+    kubernetes.io/ingress.class: azure/application-gateway
+    appgw.ingress.kubernetes.io/use-private-ip: {{ .Values.ingress.usePrivateIp | quote }}
+    appgw.ingress.kubernetes.io/request-timeout: "300"
+    appgw.ingress.kubernetes.io/cookie-based-affinity: "true"
+    {{- if .Values.ssl.enabled }}
+    appgw.ingress.kubernetes.io/backend-protocol: "https"
+    appgw.ingress.kubernetes.io/backend-hostname: {{ .Values.domainname | quote }}
+    appgw.ingress.kubernetes.io/appgw-trusted-root-certificate: {{ .Values.ssl.rootCertName | quote }}
+    {{- end }}
+    {{- if .Values.ingress.sslName }}
+    appgw.ingress.kubernetes.io/appgw-ssl-certificate: {{ .Values.ingress.sslName | quote }}
+    {{- end }}
+    {{- if .Values.ingress.wafPolicyID }}
+    appgw.ingress.kubernetes.io/waf-policy-for-path: {{ .Values.ingress.wafPolicyID | quote }}
+    {{- end }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- if .Values.ingress.hosts }}
+    - host: {{ .Values.ingress.hosts | quote }}
+      http:
+        paths:
+          {{- range .Values.ingress.paths }}
+          - path: {{ .path }}
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ $fullName }}{{ .service }}
+                port:
+                  name: {{ $portName }}
+          {{- end }}
+    {{- end }}
+    {{- if not .Values.ingress.hosts }}
+    - http:
+        paths:
+          {{- range .Values.ingress.paths }}
+          - path: {{ .path }}
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ $fullName }}{{ .service }}
+                port:
+                  name: {{ $portName }}
+          {{- end }}
+    {{- end }}
+  {{- end }}
