@@ -1,0 +1,23 @@
+namespace: postgres-test
+
+replicaCount: 1
+
+image:
+  repository: pocrke.azurecr.io/pgdata
+  tag: v2
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 5432
+
+postgresql:
+  db: t24db
+  user: null
+  password: null
+
+imagePullSecrets:
+  - name: null
+
+labels:
+  app: postgres
