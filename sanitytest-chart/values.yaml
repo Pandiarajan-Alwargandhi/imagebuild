@@ -1,0 +1,14 @@
+namespace: sanitytest
+
+serviceAccount:
+  name: my-service-account
+
+job:
+  name: my-job
+  image: pocrke.azurecr.io/sanitycontainerversion:29
+  configPath: /config/tests_config.json
+  namespacesPath: /config/namespaces.json
+
+configMapNames:
+  tests: tests-config
+  namespaces: namespaces-config

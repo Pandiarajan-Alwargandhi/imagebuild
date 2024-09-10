@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.job.name }}
+  namespace: {{ .Values.namespace }}
+spec:
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.job.name }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      containers:
+      - name: my-container
+        image: {{ .Values.job.image }}
+        command: ["python", "/app/sanitytest_containerversion.py"]
+        env:
+        - name: CONFIG_PATH
+          value: {{ .Values.job.configPath }}
+        - name: NAMESPACES_PATH
+          value: {{ .Values.job.namespacesPath }}
+        volumeMounts:
+        - name: config-volume
+          mountPath: {{ .Values.job.configPath }}
+          subPath: tests_config.json
+        - name: namespaces-volume
+          mountPath: {{ .Values.job.namespacesPath }}
+          subPath: namespaces.json
+      volumes:
+      - name: config-volume
+        configMap:
+          name: {{ .Values.configMapNames.tests }}
+      - name: namespaces-volume
+        configMap:
+          name: {{ .Values.configMapNames.namespaces }}
+      restartPolicy: Never
