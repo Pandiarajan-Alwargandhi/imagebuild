@@ -12,3 +12,6 @@ job:
 configMapNames:
   tests: tests-config
   namespaces: namespaces-config
+
+imagePullSecrets:
+  - name: acr-secret
