@@ -1,12 +1,16 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: my-role-binding
-  namespace: {{ .Values.namespace }}
+  name: {{ .Release.Name }}-role-binding-{{ .Values.buildId }}  # Use release name and build ID for uniqueness
+  labels:
+    app.kubernetes.io/managed-by: "Helm"
+  annotations:
+    meta.helm.sh/release-name: {{ .Release.Name }}
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
 subjects:
-- kind: ServiceAccount
-  name: {{ .Values.serviceAccount.name }}
-  namespace: {{ .Values.namespace }}
+  - kind: ServiceAccount
+    name: {{ .Values.serviceAccount.name }}
+    namespace: {{ .Values.namespace }}
 roleRef:
   kind: ClusterRole
   name: cluster-admin
