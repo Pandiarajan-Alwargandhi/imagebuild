@@ -13,6 +13,7 @@ spec:
       containers:
       - name: my-container
         image: {{ .Values.job.image }}
+        imagePullPolicy: IfNotPresent
         command: ["python", "/app/sanitytest_containerversion.py"]
         env:
         - name: CONFIG_PATH
@@ -34,3 +35,5 @@ spec:
         configMap:
           name: {{ .Values.configMapNames.namespaces }}
       restartPolicy: Never
+      imagePullSecrets:
+      - name: {{ .Values.imagePullSecrets[0].name }}  # Add the ACR secret
