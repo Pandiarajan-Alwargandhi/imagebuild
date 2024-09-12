@@ -11,17 +11,16 @@ job:
   image: pocrke.azurecr.io/sanitytest:latest
   configPath: /app/tests_config.json
   namespacesPath: /app/namespaces.json
-  testCasePaths: /app/test_case_paths.json
   testCasesPath: /app/test_cases.json
+  testCasePathsPath: /app/test_case_paths.json
   containerName: sanitytest-container
 
 configMapNames:
-  tests: tests-config
-  namespaces: namespaces-config
-  testCasePaths: test-case-paths-config
   testCases: test-cases-config
+  testCasePaths: test-case-paths-config
+  namespaces: namespaces-config
 
 imagePullSecrets:
-  - acr-secret  # Make sure this secret exists in the namespace
+  - acr-secret
 
 buildId: "{{ .Release.Name }}"
