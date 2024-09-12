@@ -1,17 +1,23 @@
-namespace: sanitytest
-
 serviceAccount:
-  name: my-service-account
+  name: sanitytest-serviceaccount
+
+namespace: sanitytest-{{ .Release.Name }}
+
+clusterRole:
+  name: sanitytest-clusterrole
 
 job:
-  name: my-job
-  image: pocrke.azurecr.io/sanitycontainerversion:29
-  configPath: /config/tests_config.json
-  namespacesPath: /config/namespaces.json
+  name: sanitytest-job-{{ .Release.Name }}
+  image: pocrke.azurecr.io/sanitytest:latest
+  configPath: /app/tests_config.json
+  namespacesPath: /app/namespaces.json
+  containerName: sanitytest-container
 
 configMapNames:
   tests: tests-config
   namespaces: namespaces-config
 
 imagePullSecrets:
-  - name: acr-secret
+  - name: acr-secret  # Make sure this secret exists in the namespace
+
+buildId: "{{ .Release.Name }}"
