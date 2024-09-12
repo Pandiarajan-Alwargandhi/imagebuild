@@ -1,22 +1,16 @@
-{{- if .Values.createClusterRole }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ .Release.Name }}-cluster-role-{{ .Values.buildId }}
-  labels:
-    app.kubernetes.io/managed-by: "Helm"
+  name: {{ .Release.Name }}-transact-role-{{ .Values.buildId }}
 rules:
 - apiGroups: [""]
   resources:
     - pods
     - pods/exec
     - pods/log
-    - events
   verbs:
     - get
     - list
     - watch
     - create
     - exec
-{{- end }}
-
