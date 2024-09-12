@@ -20,27 +20,25 @@ spec:
           value: {{ .Values.job.configPath }}
         - name: NAMESPACES_PATH
           value: {{ .Values.job.namespacesPath }}
-        - name: TEST_CASES_PATH
-          value: {{ .Values.job.testCasesPath }}
-        - name: TEST_CASE_PATHS_PATH
-          value: {{ .Values.job.testCasePathsPath }}
+        - name: TEST_CASE_PATHS
+          value: /app/test_case_paths.json
         volumeMounts:
+        - name: config-volume
+          mountPath: {{ .Values.job.configPath }}
+          subPath: tests_config.json
         - name: namespaces-volume
           mountPath: {{ .Values.job.namespacesPath }}
           subPath: namespaces.json
-        - name: test-cases-volume
-          mountPath: {{ .Values.job.testCasesPath }}
-          subPath: test_cases.json
         - name: test-case-paths-volume
-          mountPath: {{ .Values.job.testCasePathsPath }}
+          mountPath: /app/test_case_paths.json
           subPath: test_case_paths.json
       volumes:
+      - name: config-volume
+        configMap:
+          name: {{ .Values.configMapNames.tests }}
       - name: namespaces-volume
         configMap:
           name: {{ .Values.configMapNames.namespaces }}
-      - name: test-cases-volume
-        configMap:
-          name: {{ .Values.configMapNames.testCases }}
       - name: test-case-paths-volume
         configMap:
           name: {{ .Values.configMapNames.testCasePaths }}
