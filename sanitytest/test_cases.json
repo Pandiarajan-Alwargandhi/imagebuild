@@ -1,0 +1,23 @@
+{
+  "Transact": [
+    "check_pod_readiness",
+    "check_deployment_files",
+    "perform_api_curl_on_pods",
+    "perform_web_curl_on_pods",
+    "check_log_for_errors"
+  ],
+  "FCM": [
+    "check_pod_readiness",
+    "check_deployment_files",
+    "check_log_for_errors"
+  ],
+  "TPH": [
+    "check_pod_readiness",
+    "check_deployment_files",
+    "perform_api_curl_on_pods",
+    "check_log_for_errors"
+  ],
+  "webingress": [
+    "check_pod_readiness"
+  ]
+}
