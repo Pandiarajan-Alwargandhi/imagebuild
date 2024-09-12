@@ -10,7 +10,7 @@ COPY sanitytest_containerversion.py /app/
 # Install the required Python packages
 RUN pip install kubernetes
 
-# Set permissions for the /opt directory
+# Ensure /opt has write permissions
 RUN mkdir -p /opt && chmod -R 777 /opt
 
 # Run the Python script when the container starts
