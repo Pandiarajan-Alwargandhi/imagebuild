@@ -22,3 +22,7 @@ imagePullSecrets:
   - acr-secret  # Make sure this secret exists in the namespace
 
 buildId: "{{ .Release.Name }}"
+
+namespaces:
+  - transact
+  - webingress
