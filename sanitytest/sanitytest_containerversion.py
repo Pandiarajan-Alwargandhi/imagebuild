@@ -1,24 +1,29 @@
 import os
-import time
 import json
+import time
 import logging
 from kubernetes import client, config, stream
 from kubernetes.client.rest import ApiException
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-deployment_directory = "/opt/jboss/wildfly/standalone/deployments"
-check_interval = 5
-timeout = 300  # 5 minutes
-app_label = "temenos-transact-app"
-api_curl_url = "http://127.0.0.1:8080/irf-provider-container/api/v1.0.0/meta/apis"
-log_file_path = "/opt/jboss/wildfly/standalone/log/server.log"
+# Load externalized configuration files
+def load_config_files():
+    with open("/config/namespaces.json", "r") as ns_file:
+        namespaces = json.load(ns_file)
 
-# Web URL and credentials
-web_curl_url = "http://127.0.0.1:8080/transact-explorer-wa/#/login"
-web_username = "INPUTT"
-web_password = "123456"
+    with open("/config/test_cases.json", "r") as test_file:
+        test_cases = json.load(test_file)
+
+    with open("/config/test_case_paths.json", "r") as paths_file:
+        test_case_paths = json.load(paths_file)
+
+    return namespaces, test_cases, test_case_paths
+
+# Dynamically fetch paths based on application
+def get_app_paths(app_name, test_case_paths):
+    return test_case_paths.get(app_name, {})
 
 def load_k8s_config():
     try:
@@ -55,6 +60,8 @@ def get_pod_events(v1_api, namespace, pod_name):
         return [{"error": str(e)}]
 
 def check_pod_readiness(v1_api, namespace):
+    timeout = 300
+    check_interval = 5
     end_time = time.time() + timeout
     namespace_status = {
         "namespace": namespace,
@@ -93,7 +100,7 @@ def check_pod_readiness(v1_api, namespace):
             pod["events"] = get_pod_events(v1_api, namespace, pod["name"])
     return namespace_status
 
-def check_deployment_files(v1_api, namespace, pod_name):
+def check_deployment_files(v1_api, namespace, pod_name, deployment_directory):
     exec_command = [
         '/bin/sh',
         '-c',
@@ -119,7 +126,7 @@ def check_deployment_files(v1_api, namespace, pod_name):
         logging.error(f"Error executing command on pod {pod_name}: {e}")
         return f"Error executing command: {e}"
 
-def perform_api_curl_on_pods(v1_api, namespace, label_selector):
+def perform_api_curl_on_pods(v1_api, namespace, label_selector, api_curl_url):
     try:
         api_response = v1_api.list_namespaced_pod(namespace, label_selector=label_selector)
         pods = api_response.items
@@ -161,7 +168,7 @@ def perform_api_curl_on_pods(v1_api, namespace, label_selector):
         logging.error(f"Error listing pods in namespace {namespace}: {e}")
         return [{"error": str(e)}]
 
-def perform_web_curl_on_pods(v1_api, namespace, label_selector):
+def perform_web_curl_on_pods(v1_api, namespace, label_selector, web_curl_url, web_username, web_password):
     try:
         api_response = v1_api.list_namespaced_pod(namespace, label_selector=label_selector)
         pods = api_response.items
@@ -203,19 +210,6 @@ def perform_web_curl_on_pods(v1_api, namespace, label_selector):
         logging.error(f"Error listing pods in namespace {namespace}: {e}")
         return [{"error": str(e)}]
 
-def read_log_file(file_path):
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"The file {file_path} does not exist.")
-
-    error_messages = []
-
-    with open(file_path, 'r') as file:
-        for line in file:
-            if 'error' in line.lower():
-                error_messages.append(line.strip())
-
-    return error_messages
-
 def check_log_for_errors(v1_api, namespace, pod_name, log_file_path):
     exec_command = [
         '/bin/sh',
@@ -236,11 +230,13 @@ def check_log_for_errors(v1_api, namespace, pod_name, log_file_path):
         with open("/tmp/pod_log_output.log", "w") as log_file:
             log_file.write(response)
 
-        errors = read_log_file("/tmp/pod_log_output.log")
-        if errors:
-            return errors
-        else:
-            return []
+        errors = []
+        with open("/tmp/pod_log_output.log", 'r') as file:
+            for line in file:
+                if 'error' in line.lower():
+                    errors.append(line.strip())
+
+        return errors if errors else []
 
     except ApiException as e:
         logging.error(f"Error executing command on pod {pod_name}: {e}")
@@ -250,18 +246,13 @@ def main():
     load_k8s_config()
     v1_api = client.CoreV1Api()
 
-    with open(os.getenv("CONFIG_PATH", "/config/tests_config.json"), "r") as config_file:
-        tests_config = json.load(config_file)
-
-    with open(os.getenv("NAMESPACES_PATH", "/config/namespaces.json"), "r") as ns_file:
-        namespaces = json.load(ns_file)
-
-    if "ALL" in namespaces:
-        namespaces = [ns.metadata.name for ns in v1_api.list_namespace().items]
+    # Load the external config files
+    namespaces, test_cases, test_case_paths = load_config_files()
 
     report = []
     for namespace in namespaces:
-        tests = tests_config.get(namespace, tests_config.get("default", []))
+        app_paths = get_app_paths(namespace, test_case_paths)
+        tests = test_cases.get(namespace, test_cases.get("default", []))
         namespace_report = {
             "namespace": namespace,
             "tests": tests,
@@ -278,19 +269,19 @@ def main():
                 "name": pod.metadata.name
             }
             if "check_deployment_files" in tests:
-                pod_details["check_deployment_files"] = check_deployment_files(v1_api, namespace, pod.metadata.name)
-            if "perform_api_curl_on_pods" in tests:
-                pod_details["perform_api_curl_on_pods"] = perform_api_curl_on_pods(v1_api, namespace, f"app={app_label}")
-            if "perform_web_curl_on_pods" in tests:
-                pod_details["perform_web_curl_on_pods"] = perform_web_curl_on_pods(v1_api, namespace, f"app={app_label}")
+                pod_details["check_deployment_files"] = check_deployment_files(v1_api, namespace, pod.metadata.name, app_paths["deployment_directory"])
+            if "perform_api_curl_on_pods" in tests and "api_curl_url" in app_paths:
+                pod_details["perform_api_curl_on_pods"] = perform_api_curl_on_pods(v1_api, namespace, f"app={namespace}", app_paths["api_curl_url"])
+            if "perform_web_curl_on_pods" in tests and "web_curl_url" in app_paths:
+                pod_details["perform_web_curl_on_pods"] = perform_web_curl_on_pods(v1_api, namespace, f"app={namespace}", app_paths["web_curl_url"], app_paths["web_username"], app_paths["web_password"])
             if "check_log_for_errors" in tests:
-                pod_details["check_log_for_errors"] = check_log_for_errors(v1_api, namespace, pod.metadata.name, log_file_path)
+                pod_details["check_log_for_errors"] = check_log_for_errors(v1_api, namespace, pod.metadata.name, app_paths["log_file_path"])
 
             namespace_report["pods"].append(pod_details)
 
         report.append(namespace_report)
 
-    # Modified path to write the report to /tmp, which is typically writable
+    # Write the report to /tmp
     report_file_path = "/tmp/pod_test_results.json"
     with open(report_file_path, "w") as results_file:
         json.dump(report, results_file, indent=2)
