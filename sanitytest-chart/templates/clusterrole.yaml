@@ -1,14 +1,22 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ .Values.clusterRole.name }}
+  name: {{ .Release.Name }}-cluster-role-{{ .Values.buildId }}  # Dynamic name for uniqueness
+  labels:
+    app.kubernetes.io/managed-by: "Helm"
+  annotations:
+    meta.helm.sh/release-name: {{ .Release.Name }}
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
 rules:
-  - apiGroups: [""]
-    resources: ["pods", "pods/log", "services", "configmaps"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["apps"]
-    resources: ["deployments", "replicasets"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["pods/exec"]
-    verbs: ["create"]
+- apiGroups: [""]  # "" indicates the core API group
+  resources:
+    - pods
+    - pods/exec
+    - pods/log
+    - events
+  verbs:
+    - get
+    - list
+    - watch
+    - create
+    - exec
