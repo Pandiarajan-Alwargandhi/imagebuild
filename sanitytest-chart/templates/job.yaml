@@ -20,28 +20,26 @@ spec:
           value: {{ .Values.job.configPath }}
         - name: NAMESPACES_PATH
           value: {{ .Values.job.namespacesPath }}
-        - name: TEST_CASE_PATHS
-          value: /app/test_case_paths.json
         volumeMounts:
-        - name: config-volume
+        - name: test-cases-volume
           mountPath: {{ .Values.job.configPath }}
-          subPath: tests_config.json
+          subPath: test_cases.json
+        - name: test-case-paths-volume
+          mountPath: {{ .Values.job.configPath }}
+          subPath: test_case_paths.json
         - name: namespaces-volume
           mountPath: {{ .Values.job.namespacesPath }}
           subPath: namespaces.json
-        - name: test-case-paths-volume
-          mountPath: /app/test_case_paths.json
-          subPath: test_case_paths.json
       volumes:
-      - name: config-volume
+      - name: test-cases-volume
         configMap:
-          name: {{ .Values.configMapNames.tests }}
+          name: {{ .Values.configMapNames.test_cases }}
+      - name: test-case-paths-volume
+        configMap:
+          name: {{ .Values.configMapNames.test_case_paths }}
       - name: namespaces-volume
         configMap:
           name: {{ .Values.configMapNames.namespaces }}
-      - name: test-case-paths-volume
-        configMap:
-          name: {{ .Values.configMapNames.testCasePaths }}
       restartPolicy: Never
       imagePullSecrets:
-      - name: {{ .Values.imagePullSecrets[0].name }}
+      - name: {{ .Values.imagePullSecrets[0].name }}  # ACR secret
