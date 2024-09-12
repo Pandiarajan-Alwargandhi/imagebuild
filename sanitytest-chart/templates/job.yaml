@@ -11,7 +11,7 @@ spec:
     spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
       containers:
-      - name: my-container
+      - name: {{ .Values.job.containerName }}
         image: {{ .Values.job.image }}
         imagePullPolicy: IfNotPresent
         command: ["python", "/app/sanitytest_containerversion.py"]
@@ -36,4 +36,4 @@ spec:
           name: {{ .Values.configMapNames.namespaces }}
       restartPolicy: Never
       imagePullSecrets:
-      - name: acr-secret  # Fix array access for imagePullSecrets
+      - name: {{ .Values.imagePullSecrets[0].name }}  # Referencing the secret from values.yaml
