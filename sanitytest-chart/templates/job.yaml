@@ -11,7 +11,7 @@ spec:
     spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
       containers:
-      - name: {{ .Values.job.containerName }}
+      - name: my-container
         image: {{ .Values.job.image }}
         imagePullPolicy: IfNotPresent
         command: ["python", "/app/sanitytest_containerversion.py"]
@@ -20,6 +20,10 @@ spec:
           value: {{ .Values.job.configPath }}
         - name: NAMESPACES_PATH
           value: {{ .Values.job.namespacesPath }}
+        - name: TEST_CASE_PATHS
+          value: {{ .Values.job.testCasePaths }}
+        - name: TEST_CASES_PATH
+          value: {{ .Values.job.testCasesPath }}
         volumeMounts:
         - name: config-volume
           mountPath: {{ .Values.job.configPath }}
@@ -27,6 +31,12 @@ spec:
         - name: namespaces-volume
           mountPath: {{ .Values.job.namespacesPath }}
           subPath: namespaces.json
+        - name: test-case-paths-volume
+          mountPath: {{ .Values.job.testCasePaths }}
+          subPath: test_case_paths.json
+        - name: test-cases-volume
+          mountPath: {{ .Values.job.testCasesPath }}
+          subPath: test_cases.json
       volumes:
       - name: config-volume
         configMap:
@@ -34,10 +44,10 @@ spec:
       - name: namespaces-volume
         configMap:
           name: {{ .Values.configMapNames.namespaces }}
+      - name: test-case-paths-volume
+        configMap:
+          name: {{ .Values.configMapNames.testCasePaths }}
+      - name: test-cases-volume
+        configMap:
+          name: {{ .Values.configMapNames.testCases }}
       restartPolicy: Never
-{{- if .Values.imagePullSecrets }}
-      imagePullSecrets:
-      {{- range .Values.imagePullSecrets }}
-        - name: {{ . }}
-      {{- end }}
-{{- end }}
