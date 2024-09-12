@@ -290,7 +290,8 @@ def main():
 
         report.append(namespace_report)
 
-    report_file_path = "/opt/pod_test_results.json"
+    # Modified path to write the report to /tmp, which is typically writable
+    report_file_path = "/tmp/pod_test_results.json"
     with open(report_file_path, "w") as results_file:
         json.dump(report, results_file, indent=2)
 
