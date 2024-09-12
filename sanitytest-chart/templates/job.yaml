@@ -35,5 +35,9 @@ spec:
         configMap:
           name: {{ .Values.configMapNames.namespaces }}
       restartPolicy: Never
+{{- if .Values.imagePullSecrets }}
       imagePullSecrets:
-      - name: {{ .Values.imagePullSecrets[0].name }}  # Referencing the secret from values.yaml
+      {{- range .Values.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+{{- end }}
