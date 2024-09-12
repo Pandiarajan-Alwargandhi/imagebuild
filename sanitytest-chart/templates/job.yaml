@@ -36,4 +36,4 @@ spec:
           name: {{ .Values.configMapNames.namespaces }}
       restartPolicy: Never
       imagePullSecrets:
-      - name: {{ index .Values.imagePullSecrets 0 }}  # Fix array access for imagePullSecrets
+      - name: acr-secret  # Fix array access for imagePullSecrets
