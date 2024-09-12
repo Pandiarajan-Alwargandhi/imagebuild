@@ -5,7 +5,7 @@ import logging
 from kubernetes import client, config, stream
 from kubernetes.client.rest import ApiException
 
-# Set up logging in JSON format
+# Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 deployment_directory = "/opt/jboss/wildfly/standalone/deployments"
@@ -68,7 +68,6 @@ def check_pod_readiness(v1_api, namespace):
             pods = api_response.items
             all_ready = True
 
-            namespace_status["pods"] = []  # Clear pods list for each iteration
             for pod in pods:
                 pod_name = pod.metadata.name
                 ready = is_pod_ready(pod)
@@ -89,7 +88,6 @@ def check_pod_readiness(v1_api, namespace):
             logging.error(f"Error listing pods in namespace {namespace}: {e}")
             return {"error": str(e)}
 
-    # If timeout occurs, capture final events
     for pod in namespace_status["pods"]:
         if not pod["ready"]:
             pod["events"] = get_pod_events(v1_api, namespace, pod["name"])
@@ -298,6 +296,11 @@ def main():
         json.dump(report, results_file, indent=2)
 
     logging.info(f"Test results written to {report_file_path}")
+    
+    # Print the test results to stdout
+    with open(report_file_path, "r") as results_file:
+        report_data = results_file.read()
+        logging.info(f"Test results: {report_data}")
 
 if __name__ == "__main__":
     main()
