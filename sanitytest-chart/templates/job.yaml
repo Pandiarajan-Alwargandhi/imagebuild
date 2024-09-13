@@ -42,4 +42,4 @@ spec:
           name: {{ .Values.configMapNames.namespaces }}
       restartPolicy: Never
       imagePullSecrets:
-      - name: {{ .Values.imagePullSecrets[0].name }}
+      - name: acr-secret
