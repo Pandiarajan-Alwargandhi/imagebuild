@@ -17,29 +17,29 @@ spec:
         command: ["python", "/app/sanitytest_containerversion.py"]
         env:
         - name: CONFIG_PATH
-          value: /config/tests_config.json
+          value: /config/  # Pointing to the directory
         - name: NAMESPACES_PATH
           value: /config/namespaces.json
         - name: TEST_CASE_PATHS
           value: /config/test_case_paths.json
         volumeMounts:
-        - name: test-cases-volume
-          mountPath: /config/tests_config.json
+        - name: config-volume
+          mountPath: /config/test_cases.json
           subPath: test_cases.json
-        - name: test-case-paths-volume
+        - name: config-volume
           mountPath: /config/test_case_paths.json
           subPath: test_case_paths.json
-        - name: namespaces-volume
+        - name: config-volume
           mountPath: /config/namespaces.json
           subPath: namespaces.json
       volumes:
-      - name: test-cases-volume
+      - name: config-volume
         configMap:
           name: {{ .Values.configMapNames.test_cases }}
-      - name: test-case-paths-volume
+      - name: config-volume
         configMap:
           name: {{ .Values.configMapNames.test_case_paths }}
-      - name: namespaces-volume
+      - name: config-volume
         configMap:
           name: {{ .Values.configMapNames.namespaces }}
       restartPolicy: Never
