@@ -23,23 +23,23 @@ spec:
         - name: TEST_CASE_PATHS
           value: /config/test_case_paths.json
         volumeMounts:
-        - name: config-volume
+        - name: test-cases-volume
           mountPath: /config/test_cases.json
           subPath: test_cases.json
-        - name: config-volume
+        - name: test-case-paths-volume
           mountPath: /config/test_case_paths.json
           subPath: test_case_paths.json
-        - name: config-volume
+        - name: namespaces-volume
           mountPath: /config/namespaces.json
           subPath: namespaces.json
       volumes:
-      - name: config-volume
+      - name: test-cases-volume
         configMap:
           name: {{ .Values.configMapNames.test_cases }}
-      - name: config-volume
+      - name: test-case-paths-volume
         configMap:
           name: {{ .Values.configMapNames.test_case_paths }}
-      - name: config-volume
+      - name: namespaces-volume
         configMap:
           name: {{ .Values.configMapNames.namespaces }}
       restartPolicy: Never
