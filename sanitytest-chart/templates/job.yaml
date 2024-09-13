@@ -17,18 +17,20 @@ spec:
         command: ["python", "/app/sanitytest_containerversion.py"]
         env:
         - name: CONFIG_PATH
-          value: {{ .Values.job.configPath }}
+          value: /config/tests_config.json
         - name: NAMESPACES_PATH
-          value: {{ .Values.job.namespacesPath }}
+          value: /config/namespaces.json
+        - name: TEST_CASE_PATHS
+          value: /config/test_case_paths.json
         volumeMounts:
         - name: test-cases-volume
-          mountPath: {{ .Values.job.configPath }}
+          mountPath: /config/tests_config.json
           subPath: test_cases.json
         - name: test-case-paths-volume
-          mountPath: {{ .Values.job.configPath }}
+          mountPath: /config/test_case_paths.json
           subPath: test_case_paths.json
         - name: namespaces-volume
-          mountPath: {{ .Values.job.namespacesPath }}
+          mountPath: /config/namespaces.json
           subPath: namespaces.json
       volumes:
       - name: test-cases-volume
