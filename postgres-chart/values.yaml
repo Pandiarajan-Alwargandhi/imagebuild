@@ -17,7 +17,7 @@ postgresql:
   password: null
 
 imagePullSecrets:
-  - name: null
+  - name: registry-secret
 
 labels:
   app: postgres
