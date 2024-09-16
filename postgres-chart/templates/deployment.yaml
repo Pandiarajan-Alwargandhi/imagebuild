@@ -26,6 +26,33 @@ spec:
         - name: POSTGRES_PASSWORD
           value: "{{ .Values.postgresql.password }}"
       imagePullSecrets:
-      {{- range .Values.imagePullSecrets }}
-      - name: {{ . }}
-      {{- end }}
+      - name: registry-secret
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.labels.app }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.labels.app }}
+    spec:
+      containers:
+      - name: postgres
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        ports:
+        - containerPort: {{ .Values.service.port }}
+        env:
+        - name: POSTGRES_DB
+          value: "{{ .Values.postgresql.db }}"
+        - name: POSTGRES_USER
+          value: "{{ .Values.postgresql.user }}"
+        - name: POSTGRES_PASSWORD
+          value: "{{ .Values.postgresql.password }}"
+      imagePullSecrets:
+      - name: registry-secret
