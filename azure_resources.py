@@ -226,4 +226,8 @@ aks_client = ContainerServiceClient(credential, subscription_id)
 aks_name = f'aks-{unique_id}'
 create_aks_cluster(aks_client, resource_group_name, aks_name, subnet_result)
 
+# Print the resource group and AKS cluster names for Jenkins
+print(f"RESOURCE_GROUP={resource_group_name}")
+print(f"AKS_CLUSTER={aks_name}")
+
 print("Script execution completed.")
