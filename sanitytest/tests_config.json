@@ -1,0 +1,18 @@
+{
+  "default": [
+    "check_pod_readiness"
+  ],
+  "sanitytest": [
+    "check_pod_readiness"
+  ],
+  "webingress": [
+    "check_pod_readiness"
+  ],
+  "transact": [
+    "check_pod_readiness",
+    "check_deployment_files",
+    "perform_api_curl_on_pods",
+    "perform_web_curl_on_pods",
+    "check_log_for_errors"
+  ]
+}

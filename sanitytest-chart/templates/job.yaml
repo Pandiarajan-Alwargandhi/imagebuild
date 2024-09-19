@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.job.name }}
+  namespace: {{ .Values.namespace }}
+spec:
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.job.name }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      containers:
+      - name: {{ .Values.job.containerName }}
+        image: {{ .Values.job.image }}
+        imagePullPolicy: IfNotPresent
+        command: ["python", "/app/sanitytest_containerversion.py"]
+        env:
+        - name: CONFIG_PATH
+          value: /config/  # Pointing to the directory
+        - name: NAMESPACES_PATH
+          value: /config/namespaces.json
+        - name: TEST_CASE_PATHS
+          value: /config/test_case_paths.json
+        volumeMounts:
+        - name: test-cases-volume
+          mountPath: /config/test_cases.json
+          subPath: test_cases.json
+        - name: test-case-paths-volume
+          mountPath: /config/test_case_paths.json
+          subPath: test_case_paths.json
+        - name: namespaces-volume
+          mountPath: /config/namespaces.json
+          subPath: namespaces.json
+      volumes:
+      - name: test-cases-volume
+        configMap:
+          name: {{ .Values.configMapNames.test_cases }}
+      - name: test-case-paths-volume
+        configMap:
+          name: {{ .Values.configMapNames.test_case_paths }}
+      - name: namespaces-volume
+        configMap:
+          name: {{ .Values.configMapNames.namespaces }}
+      restartPolicy: Never
+      imagePullSecrets:
+      - name: registry-secret

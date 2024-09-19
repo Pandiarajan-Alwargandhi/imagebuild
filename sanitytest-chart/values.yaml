@@ -1,0 +1,28 @@
+serviceAccount:
+  name: sanitytest-serviceaccount
+
+namespace: sanitytest-{{ .Release.Name }}
+
+clusterRole:
+  name: sanitytest-clusterrole
+
+job:
+  name: sanitytest-job-{{ .Release.Name }}
+  image: pocrke.azurecr.io/sanitytest:latest
+  configPath: /app/tests_config.json
+  namespacesPath: /app/namespaces.json
+  containerName: sanitytest-container
+
+configMapNames:
+  test_cases: test-cases-config
+  test_case_paths: test-case-paths-config
+  namespaces: namespaces-config
+
+imagePullSecrets:
+  - acr-secret  # Make sure this secret exists in the namespace
+
+buildId: "{{ .Release.Name }}"
+
+namespaces:
+  - transact
+  - webingress

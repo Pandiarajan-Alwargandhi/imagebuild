@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-transact-role-binding-{{ .Values.buildId }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.serviceAccount.name }}
+    namespace: {{ .Values.namespace }}  # This should be the namespace of the service account (e.g., sanitytest-84)
+roleRef:
+  kind: ClusterRole
+  name: {{ .Release.Name }}-transact-role-{{ .Values.buildId }}  # The role created above
+  apiGroup: rbac.authorization.k8s.io
