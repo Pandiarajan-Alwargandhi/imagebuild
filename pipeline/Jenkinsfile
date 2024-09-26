@@ -1,0 +1,117 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'BASE_URL', defaultValue: 'https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev', description: 'Base URL for the releases')
+        string(name: 'RELEASE', defaultValue: '202408', description: 'Release version (e.g., 202408)')
+        choice(name: 'PRODUCT_GROUP', choices: ['T24', 'FCM'], description: 'Select the product group to download')
+        string(name: 'ADDITIONAL_URL', defaultValue: 'http://maven.temenosgroup.com/content/repositories/t24-releases/com/temenos', description: 'Additional base URL for downloading packages')
+        string(name: 'ADDITIONAL_PRODUCTS', defaultValue: 'TransactImageKits/App,TransactImageKits/Web', description: 'Comma-separated list of additional products to download from the additional URL')
+        choice(name: 'DATABASE_TYPE', choices: ['pos', 'sql', 'h2d', 'pos-aws', 'ora', 'nuo'], description: 'Database type for APP package')
+    }
+
+    environment {
+        CREDENTIALS_ID = 'utp-stable-dev' // Replace with your actual credentials ID
+    }
+
+    stages {
+        stage('Checkout Python Script') {
+            steps {
+                script {
+                    echo "Cloning the repository to pull the Python download script"
+                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                        sh "rm -rf imagebuild"
+                        sh "git clone https://${GITHUB_TOKEN}@github.com/Pandiarajan-Alwargandhi/imagebuild.git"
+                    }
+                }
+            }
+        }
+
+        stage('Prepare') {
+            steps {
+                script {
+                    // Define product sets for T24 and FCM
+                    def productSets = [
+                        T24: ['irf-provider-container', 't24-jars', 'tb-server', 'transact-explorer-wa'],
+                        FCM: ['fcm-backend', 'fcm-frontend']
+                    ]
+
+                    // Select the product set based on the chosen group
+                    env.PRODUCTS = productSets[params.PRODUCT_GROUP].join(',')
+                    echo "Selected products for group ${params.PRODUCT_GROUP}: ${env.PRODUCTS}"
+                }
+            }
+        }
+
+        stage('Create URLs') {
+            steps {
+                script {
+                    // Split the PRODUCTS environment variable into a list of products
+                    def products = env.PRODUCTS.split(',')
+
+                    // Initialize the list of URLs for the main base URL
+                    def urls = products.collect { product ->
+                        "${params.BASE_URL}/${params.RELEASE}/${product}/"
+                    }
+
+                    // Add additional products if specified
+                    if (params.ADDITIONAL_PRODUCTS) {
+                        def additionalProducts = params.ADDITIONAL_PRODUCTS.split(',')
+                        additionalProducts.each { product ->
+                            urls.add("${params.ADDITIONAL_URL}/${product}/${params.RELEASE}.0.0/")
+                        }
+                    }
+
+                    // Adjust URL for WEB package
+                    urls = urls.collect { url ->
+                        if (url.contains('TransactImageKits/Web')) {
+                            return url.replace("${params.RELEASE}.0.0", "${params.RELEASE}.0")
+                        }
+                        return url
+                    }
+
+                    // Join the list into a string to store in an environment variable
+                    env.URLS = urls.join(',')
+                    echo "URLs to process: ${env.URLS}"
+                }
+            }
+        }
+
+        stage('Run Python Script for Downloading Packages') {
+            steps {
+                script {
+                    def downloadDir = "${env.WORKSPACE}/downloads"
+                    sh "mkdir -p ${downloadDir}"
+                    
+                    // Split the URLs string back into a list
+                    def urls = env.URLS.split(',')
+                    urls.each { url ->
+                        echo "Processing URL: ${url}"
+
+                        sh """
+                        python3 imagebuild/pipeline/scripts/download_packages.py --url "${url}" --dir "${downloadDir}" --db_type "${params.DATABASE_TYPE}"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Post-Download Cleanup and Report') {
+            steps {
+                script {
+                    // Print the workspace directory
+                    echo "Workspace directory: ${env.WORKSPACE}"
+                    sh "ls -l ${env.WORKSPACE}/downloads"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Cleaning workspace, except downloaded files"
+            cleanWs(patterns: [[pattern: 'downloads/**', type: 'EXCLUDE']])
+            echo "Workspace cleaned"
+        }
+    }
+}
