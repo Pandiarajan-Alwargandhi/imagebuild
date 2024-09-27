@@ -9,12 +9,15 @@ def download_package(url, download_dir, credentials=None, verify_ssl=True):
     # Extract the filename from the URL and ensure we are not trying to save it as a directory
     local_filename = os.path.join(download_dir, url.split('/')[-1])
     
+    if not local_filename:  # If the URL doesn't point to a valid file
+        raise ValueError(f"Invalid URL or no filename detected: {url}")
+
     print(f"Downloading {url} to {local_filename} (SSL Verification: {verify_ssl})")
 
     # Make the HTTP request with or without credentials
     auth = (credentials['username'], credentials['password']) if credentials else None
     with requests.get(url, stream=True, verify=verify_ssl, auth=auth) as r:
-        r.raise_for_status()
+        r.raise_for_status()  # Check for HTTP errors
         with open(local_filename, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
                 if chunk:
