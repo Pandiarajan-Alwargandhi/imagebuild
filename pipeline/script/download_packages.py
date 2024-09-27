@@ -6,13 +6,15 @@ from bs4 import BeautifulSoup
 
 # Function to download the file
 def download_package(url, download_dir, credentials=None, verify_ssl=True):
+    # Extract the filename from the URL and ensure we are not trying to save it as a directory
     local_filename = os.path.join(download_dir, url.split('/')[-1])
-
+    
     if not local_filename or os.path.isdir(local_filename):  # Validate the path
         raise ValueError(f"Invalid URL or no filename detected: {url}")
 
     print(f"Downloading {url} to {local_filename} (SSL Verification: {verify_ssl})")
 
+    # Make the HTTP request with or without credentials
     auth = (credentials['username'], credentials['password']) if credentials else None
     with requests.get(url, stream=True, verify=verify_ssl, auth=auth) as r:
         r.raise_for_status()  # Check for HTTP errors
@@ -67,20 +69,23 @@ def main():
             print(f"Processing product: {product['name']}")
             for package in product['packages']:
                 # Replace {{version}} and {{db_type}} with the actual values in the path
-                if not package['path'].startswith('http'):
-                    package_url = package['base_url'] + package['path'].replace('{{version}}', args.version).replace('{{db_type}}', args.db_type)
-                else:
+                package_url = package['base_url'] + package['path'].replace('{{version}}', args.version).replace('{{db_type}}', args.db_type)
+                
+                # Ensure not concatenating full URLs
+                if package['base_url'].startswith('http') and package['path'].startswith('http'):
                     package_url = package['path']
 
                 # Handle credentials if required
                 credentials = None
                 if package.get('credentials_required', False):
-                    file_url = find_file_in_directory(package_url, args.db_type, credentials={'username': args.username, 'password': args.password}, verify_ssl=not args.ignore_ssl)
-                else:
-                    file_url = find_file_in_directory(package_url, args.db_type, verify_ssl=not args.ignore_ssl)
+                    credentials = {'username': args.username, 'password': args.password}
 
                 # Download the package
-                download_package(file_url, config['download_dir'], credentials=credentials, verify_ssl=not args.ignore_ssl)
+                try:
+                    file_url = find_file_in_directory(package_url, args.db_type, credentials=credentials, verify_ssl=not args.ignore_ssl)
+                    download_package(file_url, config['download_dir'], credentials=credentials, verify_ssl=not args.ignore_ssl)
+                except ValueError as e:
+                    print(f"Error while processing package: {e}")
 
 if __name__ == "__main__":
     main()
