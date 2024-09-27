@@ -9,9 +9,9 @@ def download_package(url, download_dir, credentials=None, verify_ssl=True):
     # Extract the filename from the URL and ensure we are not trying to save it as a directory
     local_filename = os.path.join(download_dir, url.split('/')[-1])
     
-    if not local_filename or os.path.isdir(download_dir):  # Validate the path
+    if not local_filename or os.path.isdir(local_filename):  # Validate the path
         raise ValueError(f"Invalid URL or no filename detected: {url}")
-    
+
     print(f"Downloading {url} to {local_filename} (SSL Verification: {verify_ssl})")
 
     # Make the HTTP request with or without credentials
@@ -25,15 +25,26 @@ def download_package(url, download_dir, credentials=None, verify_ssl=True):
 
     print(f"Downloaded {local_filename}")
 
-# Function to check and ensure URL is valid
-def check_url_exists(url, credentials=None, verify_ssl=True):
+# Function to find the actual file link in the directory URL
+def find_file_in_directory(url, db_type, credentials=None, verify_ssl=True):
     auth = (credentials['username'], credentials['password']) if credentials else None
-    try:
-        response = requests.head(url, auth=auth, verify=verify_ssl)
-        return response.status_code == 200
-    except Exception as e:
-        print(f"Error checking URL: {url}, Error: {e}")
-        return False
+    response = requests.get(url, auth=auth, verify=verify_ssl)
+    
+    if response.status_code != 200:
+        raise ValueError(f"Failed to fetch URL content, status code: {response.status_code}")
+
+    # Parse HTML to find links
+    soup = BeautifulSoup(response.content, 'html.parser')
+    links = [a['href'] for a in soup.find_all('a', href=True)]
+
+    # Filter the links to find the file you're looking for
+    filtered_links = [link for link in links if db_type in link and link.endswith('.zip')]  # Adjust the extension as needed
+
+    if not filtered_links:
+        raise ValueError(f"No valid file found for db_type {db_type} in directory: {url}")
+
+    # Assume the last file is the one to download (usually the newest or most relevant one)
+    return url + filtered_links[-1]
 
 # Main logic to fetch the page, filter the packages, and download them
 def main():
@@ -65,13 +76,11 @@ def main():
                 if package.get('credentials_required', False):
                     credentials = {'username': args.username, 'password': args.password}
                 
-                # Check if URL exists before attempting to download
-                if not check_url_exists(package_url, credentials, verify_ssl=not args.ignore_ssl):
-                    print(f"Failed to fetch URL content, status code: 404 for {package_url}")
-                    continue
-                
+                # Find the actual file to download within the directory
+                file_url = find_file_in_directory(package_url, args.db_type, credentials, verify_ssl=not args.ignore_ssl)
+
                 # Download the package
-                download_package(package_url, config['download_dir'], credentials=credentials, verify_ssl=not args.ignore_ssl)
+                download_package(file_url, config['download_dir'], credentials=credentials, verify_ssl=not args.ignore_ssl)
 
 if __name__ == "__main__":
     main()
