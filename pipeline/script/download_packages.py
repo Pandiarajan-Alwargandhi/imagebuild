@@ -9,9 +9,9 @@ def download_package(url, download_dir, credentials=None, verify_ssl=True):
     # Extract the filename from the URL and ensure we are not trying to save it as a directory
     local_filename = os.path.join(download_dir, url.split('/')[-1])
     
-    if not local_filename:  # If the URL doesn't point to a valid file
+    if not local_filename or os.path.isdir(download_dir):  # Validate the path
         raise ValueError(f"Invalid URL or no filename detected: {url}")
-
+    
     print(f"Downloading {url} to {local_filename} (SSL Verification: {verify_ssl})")
 
     # Make the HTTP request with or without credentials
@@ -24,6 +24,16 @@ def download_package(url, download_dir, credentials=None, verify_ssl=True):
                     f.write(chunk)
 
     print(f"Downloaded {local_filename}")
+
+# Function to check and ensure URL is valid
+def check_url_exists(url, credentials=None, verify_ssl=True):
+    auth = (credentials['username'], credentials['password']) if credentials else None
+    try:
+        response = requests.head(url, auth=auth, verify=verify_ssl)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Error checking URL: {url}, Error: {e}")
+        return False
 
 # Main logic to fetch the page, filter the packages, and download them
 def main():
@@ -54,6 +64,11 @@ def main():
                 credentials = None
                 if package.get('credentials_required', False):
                     credentials = {'username': args.username, 'password': args.password}
+                
+                # Check if URL exists before attempting to download
+                if not check_url_exists(package_url, credentials, verify_ssl=not args.ignore_ssl):
+                    print(f"Failed to fetch URL content, status code: 404 for {package_url}")
+                    continue
                 
                 # Download the package
                 download_package(package_url, config['download_dir'], credentials=credentials, verify_ssl=not args.ignore_ssl)
