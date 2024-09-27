@@ -2,13 +2,13 @@ import requests
 from bs4 import BeautifulSoup
 import argparse
 import os
-import json  # Add this import
+import json
 
 # Function to download the file
-def download_package(url, download_dir):
+def download_package(url, download_dir, verify_ssl=True):
     local_filename = os.path.join(download_dir, url.split('/')[-1])
-    print(f"Downloading {url} to {local_filename}")
-    with requests.get(url, stream=True) as r:
+    print(f"Downloading {url} to {local_filename} (SSL Verification: {verify_ssl})")
+    with requests.get(url, stream=True, verify=verify_ssl) as r:
         r.raise_for_status()
         with open(local_filename, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
@@ -16,77 +16,85 @@ def download_package(url, download_dir):
                     f.write(chunk)
     print(f"Downloaded {local_filename}")
 
-# Function to filter the packages for a given database type and only `.zip` files
-def filter_packages(links, db_type):
-    filtered = []
-    for link in links:
-        # Ensure we are filtering for the exact db_type (e.g., -pos-) but not variations like -pos-aws-
-        filename = link.split('/')[-1]
-        if f"-{db_type}-" in filename and not f"-{db_type}-aws-" in filename and filename.endswith('.zip'):
-            filtered.append(link)
-    return filtered
+# Function to fetch and filter the packages for a given database type
+def fetch_and_filter_packages(base_url, db_type=None, verify_ssl=True):
+    print(f"Fetching contents of {base_url} (SSL Verification: {verify_ssl})")
+    response = requests.get(base_url, verify=verify_ssl)
+    if response.status_code != 200:
+        print(f"Failed to fetch URL content, status code: {response.status_code}")
+        return []
 
-# Main logic to fetch the page, filter the packages, and download the latest one
+    page_content = response.content
+    soup = BeautifulSoup(page_content, 'html.parser')
+    links = [a['href'] for a in soup.find_all('a', href=True)]
+    print(f"Found {len(links)} links on the page")
+
+    if db_type:
+        # Filter the packages based on db_type
+        links = [link for link in links if f"-{db_type}-" in link and link.endswith('.zip')]
+    else:
+        # Just get the zip files
+        links = [link for link in links if link.endswith('.zip') or link.endswith('.war')]
+
+    print("Filtered packages:")
+    for pkg in links:
+        print(pkg)
+
+    return links
+
+# Main logic to process the JSON config and download packages
 def main():
-    parser = argparse.ArgumentParser(description="Download packages based on a configuration file")
-    parser.add_argument('--config', required=True, help="Path to the config JSON file")
-    parser.add_argument('--product_groups', required=True, help="Comma-separated product groups to download")
-    parser.add_argument('--version', required=True, help="Version of the product")
-    parser.add_argument('--db_type', required=True, help="Database type for T24 preimage kit")
+    parser = argparse.ArgumentParser(description="Download packages based on JSON configuration")
+    parser.add_argument('--config', required=True, help="Path to JSON configuration file")
+    parser.add_argument('--product_groups', required=True, help="Comma-separated list of product groups to download (e.g., T24, FCM)")
+    parser.add_argument('--version', required=True, help="Version to download (e.g., 202409)")
+    parser.add_argument('--db_type', required=False, help="Database type (for preimage kits)")
+    parser.add_argument('--ignore_ssl', action='store_true', help="Ignore SSL verification")
 
     args = parser.parse_args()
 
-    # Load the config JSON
+    # Load the configuration JSON
     with open(args.config, 'r') as f:
         config = json.load(f)
 
-    download_dir = config.get("download_dir")
-    if not download_dir:
-        print("Download directory not specified in config")
-        return
-
-    # Get product groups from command-line args
     product_groups = args.product_groups.split(',')
+    version = args.version
+    db_type = args.db_type
+    ignore_ssl = args.ignore_ssl
 
     for product in config["products"]:
         if product["name"] in product_groups:
             print(f"Processing product: {product['name']}")
             for pkg in product["packages"]:
-                package_url = pkg["base_url"] + pkg["path"].replace("{{version}}", args.version)
+                package_url = pkg["base_url"] + pkg["path"].replace("{{version}}", version)
+                download_dir = config["download_dir"]
 
-                # If db_filter is true, adjust URL for the database type
-                if pkg.get("db_filter", False):
-                    print(f"Fetching contents of {package_url}")
-                    response = requests.get(package_url)
-                    if response.status_code != 200:
-                        print(f"Failed to fetch URL content, status code: {response.status_code}")
-                        continue
-                    page_content = response.content
-                    soup = BeautifulSoup(page_content, 'html.parser')
-                    links = [a['href'] for a in soup.find_all('a', href=True)]
-                    filtered_packages = filter_packages(links, args.db_type)
+                # Use SSL verification or not based on the flag
+                verify_ssl = not ignore_ssl
 
-                    if filtered_packages:
-                        latest_package = filtered_packages[-1]
-                        if not latest_package.startswith('http'):
-                            download_url = package_url + latest_package
-                        else:
-                            download_url = latest_package
-
-                        download_package(download_url, download_dir)
-                    else:
-                        print(f"No valid .zip packages found for {args.db_type}")
-                else:
-                    print(f"Fetching contents of {package_url}")
+                # If the package has credentials, download using them
+                if pkg.get("credentials_required", False):
+                    print(f"Downloading with credentials: {pkg['jenkins_credentials_id']}")
+                    # Add logic to pull credentials if needed (handled externally via Jenkins)
                     try:
-                        if pkg.get("credentials_required", False):
-                            # Handle credentials (assumed to be handled in Jenkins or passed externally)
-                            print(f"Downloading with credentials: {pkg['jenkins_credentials_id']}")
-                            download_package(package_url, download_dir)
-                        else:
-                            download_package(package_url, download_dir)
+                        download_package(package_url, download_dir, verify_ssl=verify_ssl)
                     except Exception as e:
                         print(f"Failed to download {pkg['package_name']} from {package_url}: {e}")
+                else:
+                    # If it's a preimage kit or any other package without credentials
+                    if pkg.get("db_filter", False) and db_type:
+                        package_links = fetch_and_filter_packages(package_url, db_type=db_type, verify_ssl=verify_ssl)
+                    else:
+                        package_links = fetch_and_filter_packages(package_url, verify_ssl=verify_ssl)
+
+                    # Download the filtered packages
+                    if package_links:
+                        for link in package_links:
+                            full_url = package_url + link
+                            try:
+                                download_package(full_url, download_dir, verify_ssl=verify_ssl)
+                            except Exception as e:
+                                print(f"Failed to download {link} from {package_url}: {e}")
 
 if __name__ == "__main__":
     main()
