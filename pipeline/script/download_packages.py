@@ -69,11 +69,13 @@ def main():
             print(f"Processing product: {product['name']}")
             for package in product['packages']:
                 # Replace {{version}} and {{db_type}} with the actual values in the path
-                package_url = package['path'].replace('{{version}}', args.version).replace('{{db_type}}', args.db_type)
+                package_path = package['path'].replace('{{version}}', args.version).replace('{{db_type}}', args.db_type)
                 
                 # If the path is not a full URL, prepend the base_url
-                if not package_url.startswith('http'):
-                    package_url = package['base_url'].rstrip('/') + package_url
+                if package_path.startswith('http'):
+                    package_url = package_path
+                else:
+                    package_url = package['base_url'].rstrip('/') + package_path
 
                 # Handle credentials if required
                 credentials = None
