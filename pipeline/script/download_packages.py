@@ -33,10 +33,10 @@ def fetch_and_filter_packages(base_url, db_type=None, verify_ssl=True):
     print(f"Found {len(links)} links on the page")
 
     if db_type:
-        # Filter the packages based on db_type
-        links = [link for link in links if f"-{db_type}-" in link and link.endswith('.zip')]
+        # Filter the packages based on db_type (exact match, avoiding things like 'pos-aws')
+        links = [link for link in links if f"-{db_type}-" in link.split('/')[-1] and not f"-{db_type}-aws-" in link and link.endswith('.zip')]
     else:
-        # Just get the zip files
+        # Just get the zip files or war files if db_type is not needed
         links = [link for link in links if link.endswith('.zip') or link.endswith('.war')]
 
     print("Filtered packages:")
