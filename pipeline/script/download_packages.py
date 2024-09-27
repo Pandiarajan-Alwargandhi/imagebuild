@@ -9,7 +9,6 @@ from urllib.parse import urljoin
 # Suppress SSL warnings if ignoring SSL verification
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-
 # Function to download the file
 def download_package(url, download_dir, credentials=None, verify_ssl=True):
     # Ensure download directory exists
