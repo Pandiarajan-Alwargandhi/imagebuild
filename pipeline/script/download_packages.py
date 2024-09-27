@@ -26,9 +26,9 @@ def download_package(url, download_dir, credentials=None, verify_ssl=True):
     print(f"Downloaded {local_filename}")
 
 # Function to find the actual file link in the directory URL
-def find_file_in_directory(url, db_type, credentials=None, verify_ssl=True):
+def find_file_in_directory(base_url, db_type, credentials=None, verify_ssl=True):
     auth = (credentials['username'], credentials['password']) if credentials else None
-    response = requests.get(url, auth=auth, verify=verify_ssl)
+    response = requests.get(base_url, auth=auth, verify=verify_ssl)
     
     if response.status_code != 200:
         raise ValueError(f"Failed to fetch URL content, status code: {response.status_code}")
@@ -41,10 +41,10 @@ def find_file_in_directory(url, db_type, credentials=None, verify_ssl=True):
     filtered_links = [link for link in links if db_type in link and link.endswith('.zip')]  # Adjust the extension as needed
 
     if not filtered_links:
-        raise ValueError(f"No valid file found for db_type {db_type} in directory: {url}")
+        raise ValueError(f"No valid file found for db_type {db_type} in directory: {base_url}")
 
     # Assume the last file is the one to download (usually the newest or most relevant one)
-    return url + filtered_links[-1]
+    return base_url.rstrip('/') + '/' + filtered_links[-1]
 
 # Main logic to fetch the page, filter the packages, and download them
 def main():
@@ -73,7 +73,7 @@ def main():
                 
                 # If the path is not a full URL, prepend the base_url
                 if not package_url.startswith('http'):
-                    package_url = package['base_url'] + package_url
+                    package_url = package['base_url'].rstrip('/') + package_url
 
                 # Handle credentials if required
                 credentials = None
