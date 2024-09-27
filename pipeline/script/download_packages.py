@@ -9,6 +9,9 @@ def download_package(url, download_dir, verify_ssl=True):
     local_filename = os.path.join(download_dir, url.split('/')[-1])
     print(f"Downloading {url} to {local_filename} (SSL Verification: {verify_ssl})")
     with requests.get(url, stream=True, verify=verify_ssl) as r:
+        if r.status_code == 404:
+            print(f"Failed to download {url}, status code: 404")
+            return
         r.raise_for_status()
         with open(local_filename, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
@@ -66,6 +69,7 @@ def main():
         if product["name"] in product_groups:
             print(f"Processing product: {product['name']}")
             for pkg in product["packages"]:
+                # Fixing URL concatenation logic
                 package_url = pkg["base_url"] + pkg["path"].replace("{{version}}", version)
                 download_dir = config["download_dir"]
 
@@ -90,7 +94,11 @@ def main():
                     # Download the filtered packages
                     if package_links:
                         for link in package_links:
-                            full_url = package_url + link
+                            # Ensure we don't prepend the base URL twice
+                            if link.startswith('http'):
+                                full_url = link
+                            else:
+                                full_url = package_url + link
                             try:
                                 download_package(full_url, download_dir, verify_ssl=verify_ssl)
                             except Exception as e:
