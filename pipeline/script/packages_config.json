@@ -2,13 +2,14 @@
   "products": [
     {
       "name": "T24",
-      "version": "{{VERSION}}",  
-      "db_type": "{{DB_TYPE}}",  
+      "version": "{{version}}",  
+      "db_type": "{{db_type}}",  
       "packages": [
         {
           "package_name": "preimage-transact-app",
           "base_url": "http://maven.temenosgroup.com/content/repositories/t24-releases/com/temenos/TransactImageKits/App",
           "path": "/{{version}}.0.0/",
+          "file_name": "preimage-transact-app-{{db_type}}-{{version}}.0.0.zip",  # Dynamic file name based on db_type and version
           "db_filter": true, 
           "credentials_required": false
         },
@@ -16,6 +17,7 @@
           "package_name": "irf-provider-container",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
           "path": "/irf-provider-container/",
+          "file_name": "irf-provider-container-{{version}}.zip",  # Example file name; adjust as per your actual file structure
           "credentials_required": true,
           "db_filter": false, 
           "jenkins_credentials_id": "utp-stable-dev"
@@ -24,6 +26,7 @@
           "package_name": "t24-jars",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
           "path": "/t24-jars/",
+          "file_name": "t24-jars-{{version}}.zip",  # Example file name; adjust as per your actual file structure
           "credentials_required": true,
           "db_filter": false, 
           "jenkins_credentials_id": "utp-stable-dev"
@@ -32,6 +35,7 @@
           "package_name": "transact-explorer-wa",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
           "path": "/t24-jars/",
+          "file_name": "transact-explorer-wa-{{version}}.zip",  # Example file name; adjust as per your actual file structure
           "credentials_required": true,
           "db_filter": false, 
           "jenkins_credentials_id": "utp-stable-dev"
@@ -40,6 +44,7 @@
           "package_name": "tb-server",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
           "path": "/tb-server/",
+          "file_name": "tb-server-{{version}}.zip",  # Example file name; adjust as per your actual file structure
           "credentials_required": true,
           "db_filter": false, 
           "jenkins_credentials_id": "utp-stable-dev"
@@ -48,12 +53,13 @@
     },
     {
       "name": "FCM",
-      "version": "{{VERSION}}",
+      "version": "{{version}}",
       "packages": [
         {
           "package_name": "fcm-backend",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
           "path": "/fcm-backend/",
+          "file_name": "fcm-backend-{{version}}.zip",  # Example file name; adjust as per your actual file structure
           "credentials_required": true,
           "jenkins_credentials_id": "utp-stable-dev"
         },
@@ -61,6 +67,7 @@
           "package_name": "fcm-frontend",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
           "path": "/fcm-frontend/",
+          "file_name": "fcm-frontend-{{version}}.zip",  # Example file name; adjust as per your actual file structure
           "credentials_required": true,
           "jenkins_credentials_id": "utp-stable-dev"
         }
