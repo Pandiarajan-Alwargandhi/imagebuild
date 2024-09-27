@@ -1,0 +1,71 @@
+{
+  "products": [
+    {
+      "name": "T24",
+      "version": "{{VERSION}}",  
+      "db_type": "{{DB_TYPE}}",  
+      "packages": [
+        {
+          "package_name": "preimage-transact-app",
+          "base_url": "http://maven.temenosgroup.com/content/repositories/t24-releases/com/temenos/TransactImageKits/App",
+          "path": "/{{version}}.0.0/",
+          "db_filter": true, 
+          "credentials_required": false
+        },
+        {
+          "package_name": "irf-provider-container",
+          "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
+          "path": "/irf-provider-container/",
+          "credentials_required": true,
+          "db_filter": false, 
+          "jenkins_credentials_id": "utp-stable-dev"
+        },
+        {
+          "package_name": "t24-jars",
+          "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
+          "path": "/t24-jars/",
+          "credentials_required": true,
+          "db_filter": false, 
+          "jenkins_credentials_id": "utp-stable-dev"
+        },
+        {
+          "package_name": "transact-explorer-wa",
+          "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
+          "path": "/t24-jars/",
+          "credentials_required": true,
+          "db_filter": false, 
+          "jenkins_credentials_id": "utp-stable-dev"
+        },
+        {
+          "package_name": "tb-server",
+          "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
+          "path": "/tb-server/",
+          "credentials_required": true,
+          "db_filter": false, 
+          "jenkins_credentials_id": "utp-stable-dev"
+        }
+      ]
+    },
+    {
+      "name": "FCM",
+      "version": "{{VERSION}}",
+      "packages": [
+        {
+          "package_name": "fcm-backend",
+          "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
+          "path": "/fcm-backend/",
+          "credentials_required": true,
+          "jenkins_credentials_id": "utp-stable-dev"
+        },
+        {
+          "package_name": "fcm-frontend",
+          "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
+          "path": "/fcm-frontend/",
+          "credentials_required": true,
+          "jenkins_credentials_id": "utp-stable-dev"
+        }
+      ]
+    }
+  ],
+  "download_dir": "/var/lib/jenkins/workspace/DownloadPackages/"
+}
