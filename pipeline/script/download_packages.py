@@ -8,9 +8,8 @@ from bs4 import BeautifulSoup
 def download_package(url, download_dir, credentials=None, verify_ssl=True):
     # Extract the filename from the URL and ensure we are not trying to save it as a directory
     local_filename = os.path.join(download_dir, url.split('/')[-1])
-
-    # Check if the URL is valid
-    if not url.endswith(".zip"):  # Check if it's a valid file URL based on extension
+    
+    if not local_filename:  # If the URL doesn't point to a valid file
         raise ValueError(f"Invalid URL or no filename detected: {url}")
 
     print(f"Downloading {url} to {local_filename} (SSL Verification: {verify_ssl})")
@@ -48,15 +47,10 @@ def main():
         if product['name'] == args.product_groups:
             print(f"Processing product: {product['name']}")
             for package in product['packages']:
-                # Replace {{version}} and {{db_type}} with the actual values in the path
-                package_path = package['path'].replace('{{version}}', args.version).replace('{{db_type}}', args.db_type)
-
-                # Correct the URL construction to avoid duplication of the base URL
-                if package_path.startswith('http'):
-                    package_url = package_path
-                else:
-                    package_url = package['base_url'].rstrip('/') + package_path
-
+                # Replace placeholders with actual values in the file name
+                package_file_name = package['file_name'].replace('{{version}}', args.version).replace('{{db_type}}', args.db_type)
+                package_url = package['base_url'].rstrip('/') + package['path'].replace('{{version}}', args.version) + package_file_name
+                
                 # Handle credentials if required
                 credentials = None
                 if package.get('credentials_required', False):
