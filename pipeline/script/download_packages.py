@@ -27,20 +27,18 @@ def get_latest_file_from_directory(url, file_name_pattern, auth=None, verify_ssl
     # Sort the files to get the latest one
     matching_files.sort(reverse=True)
     print(f"Latest file found: {matching_files[0]}")
-    return matching_files[0]  # Return the latest file
+    return matching_files[0]  # Return the latest file name, not the full URL
 
 # Function to download the file
-def download_package(url, download_dir, auth=None, verify_ssl=True):
-    # Extract the filename from the URL and ensure we are not trying to save it as a directory
-    local_filename = os.path.join(download_dir, url.split('/')[-1])
-    
-    if not local_filename:  # If the URL doesn't point to a valid file
-        raise ValueError(f"Invalid URL or no filename detected: {url}")
+def download_package(base_url, file_name, download_dir, auth=None, verify_ssl=True):
+    # Construct the full URL
+    full_url = base_url + file_name
+    local_filename = os.path.join(download_dir, file_name)
 
-    print(f"Downloading {url} to {local_filename} (SSL Verification: {verify_ssl})")
+    print(f"Downloading {full_url} to {local_filename} (SSL Verification: {verify_ssl})")
 
     # Make the HTTP request with or without credentials
-    with requests.get(url, stream=True, verify=verify_ssl, auth=auth) as r:
+    with requests.get(full_url, stream=True, verify=verify_ssl, auth=auth) as r:
         r.raise_for_status()  # Check for HTTP errors
         with open(local_filename, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
@@ -83,9 +81,8 @@ def main():
                 # Get the latest file matching the pattern
                 latest_file = get_latest_file_from_directory(package_url, file_name_pattern, auth=credentials, verify_ssl=not args.ignore_ssl)
                 
-                # Construct the full URL for the file
-                full_url = package_url + latest_file
-                download_package(full_url, config['download_dir'], auth=credentials, verify_ssl=not args.ignore_ssl)
+                # Download the latest file
+                download_package(package_url, latest_file, config['download_dir'], auth=credentials, verify_ssl=not args.ignore_ssl)
 
 if __name__ == "__main__":
     main()
