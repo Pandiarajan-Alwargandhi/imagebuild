@@ -3,6 +3,10 @@ import argparse
 import os
 import json
 from bs4 import BeautifulSoup
+import urllib3
+
+# Suppress SSL warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Function to download the file
 def download_package(full_url, download_dir, auth=None, verify_ssl=True):
