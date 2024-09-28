@@ -5,13 +5,10 @@ import json
 from bs4 import BeautifulSoup
 
 # Function to download the file
-def download_package(base_url, file_name, download_dir, auth=None, verify_ssl=True):
-    # Construct the full URL using base_url and file_name (which contains only the relative path or file name)
-    full_url = base_url.rstrip('/') + '/' + file_name
+def download_package(full_url, download_dir, auth=None, verify_ssl=True):
+    # Extract the filename from the URL and ensure we are not trying to save it as a directory
+    local_filename = os.path.join(download_dir, full_url.split('/')[-1])
 
-    # Local file path to save the file
-    local_filename = os.path.join(download_dir, file_name.split('/')[-1])
-    
     print(f"Downloading {full_url} to {local_filename} (SSL Verification: {verify_ssl})")
 
     # Make the HTTP request with or without credentials
@@ -29,7 +26,7 @@ def get_latest_file_from_directory(url, file_name_pattern, auth=None, verify_ssl
     response = requests.get(url, auth=auth, verify=verify_ssl)
     response.raise_for_status()  # Raise an error for bad HTTP responses
     soup = BeautifulSoup(response.text, 'html.parser')
-    
+
     # List files matching the pattern
     files = [a['href'] for a in soup.find_all('a') if file_name_pattern in a['href']]
     
@@ -38,11 +35,11 @@ def get_latest_file_from_directory(url, file_name_pattern, auth=None, verify_ssl
     
     # Sort the files to ensure the latest one comes last (you can adjust the logic if needed)
     files.sort()
-    
+
     print("Available files in the directory:")
     for file in files:
         print(file)
-    
+
     latest_file = files[-1]  # The last file is the latest
     print(f"Latest file found: {latest_file}")
     return latest_file
@@ -84,8 +81,9 @@ def main():
                 # Fetch the latest file based on the pattern
                 latest_file = get_latest_file_from_directory(package_url, file_name_pattern, auth=credentials, verify_ssl=not args.ignore_ssl)
 
-                # Download the latest file
-                download_package(package_url, latest_file, config['download_dir'], auth=credentials, verify_ssl=not args.ignore_ssl)
+                # Download the latest file (latest_file is now only the file name)
+                full_url = latest_file if latest_file.startswith("http") else package_url + latest_file
+                download_package(full_url, config['download_dir'], auth=credentials, verify_ssl=not args.ignore_ssl)
 
 if __name__ == "__main__":
     main()
