@@ -4,48 +4,48 @@ import os
 import json
 from bs4 import BeautifulSoup
 
-# Function to get the latest file from the directory based on the file name pattern
-def get_latest_file_from_directory(url, file_name_pattern, auth=None, verify_ssl=True):
-    print(f"Fetching contents of {url} (SSL Verification: {verify_ssl})")
-    response = requests.get(url, auth=auth, verify=verify_ssl)
-    response.raise_for_status()
-
-    soup = BeautifulSoup(response.text, 'html.parser')
-    links = soup.find_all('a')
-
-    # Log available files for debugging
-    print("Available files in the directory:")
-    for link in links:
-        print(link['href'])
-
-    # Filter files based on the pattern (relaxed matching)
-    matching_files = [link['href'] for link in links if file_name_pattern in link['href']]
-
-    if not matching_files:
-        raise ValueError(f"No valid files found matching the pattern: {file_name_pattern}")
-
-    # Sort the files to get the latest one
-    matching_files.sort(reverse=True)
-    print(f"Latest file found: {matching_files[0]}")
-    return matching_files[0]  # Return the latest file name, not the full URL
-
 # Function to download the file
 def download_package(base_url, file_name, download_dir, auth=None, verify_ssl=True):
-    # Construct the full URL
-    full_url = base_url + file_name
-    local_filename = os.path.join(download_dir, file_name)
+    # Construct the full URL using base_url and file_name (which contains only the relative path or file name)
+    full_url = base_url.rstrip('/') + '/' + file_name
 
+    # Local file path to save the file
+    local_filename = os.path.join(download_dir, file_name.split('/')[-1])
+    
     print(f"Downloading {full_url} to {local_filename} (SSL Verification: {verify_ssl})")
 
     # Make the HTTP request with or without credentials
-    with requests.get(full_url, stream=True, verify=verify_ssl, auth=auth) as r:
+    with requests.get(full_url, stream=True, auth=auth, verify=verify_ssl) as r:
         r.raise_for_status()  # Check for HTTP errors
         with open(local_filename, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
+                f.write(chunk)
 
     print(f"Downloaded {local_filename}")
+
+# Function to get the latest file from a directory listing
+def get_latest_file_from_directory(url, file_name_pattern, auth=None, verify_ssl=True):
+    print(f"Fetching contents of {url} (SSL Verification: {verify_ssl})")
+    response = requests.get(url, auth=auth, verify=verify_ssl)
+    response.raise_for_status()  # Raise an error for bad HTTP responses
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    # List files matching the pattern
+    files = [a['href'] for a in soup.find_all('a') if file_name_pattern in a['href']]
+    
+    if not files:
+        raise ValueError(f"No valid files found matching the pattern: {file_name_pattern}")
+    
+    # Sort the files to ensure the latest one comes last (you can adjust the logic if needed)
+    files.sort()
+    
+    print("Available files in the directory:")
+    for file in files:
+        print(file)
+    
+    latest_file = files[-1]  # The last file is the latest
+    print(f"Latest file found: {latest_file}")
+    return latest_file
 
 # Main logic to fetch the page, filter the packages, and download them
 def main():
@@ -69,18 +69,21 @@ def main():
         if product['name'] == args.product_groups:
             print(f"Processing product: {product['name']}")
             for package in product['packages']:
-                # Replace {{version}} and {{db_type}} with the actual values in the path and file name pattern
-                package_url = package['base_url'] + package['path'].replace('{{version}}', args.version).replace('{{db_type}}', args.db_type)
-                file_name_pattern = package['file_name_pattern'].replace('{{version}}', args.version).replace('{{db_type}}', args.db_type)
+                # Replace placeholders in the base_url and path
+                base_url = package['base_url']
+                package_url = base_url + package['path'].replace('{{version}}', args.version)
 
+                # Pattern to find the file
+                file_name_pattern = package['file_name_pattern'].replace('{{version}}', args.version).replace('{{db_type}}', args.db_type)
+                
                 # Handle credentials if required
                 credentials = None
                 if package.get('credentials_required', False):
                     credentials = (args.username, args.password)
-                
-                # Get the latest file matching the pattern
+
+                # Fetch the latest file based on the pattern
                 latest_file = get_latest_file_from_directory(package_url, file_name_pattern, auth=credentials, verify_ssl=not args.ignore_ssl)
-                
+
                 # Download the latest file
                 download_package(package_url, latest_file, config['download_dir'], auth=credentials, verify_ssl=not args.ignore_ssl)
 
