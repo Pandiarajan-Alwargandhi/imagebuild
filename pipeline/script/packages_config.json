@@ -9,67 +9,55 @@
           "package_name": "preimage-transact-app",
           "base_url": "http://maven.temenosgroup.com/content/repositories/t24-releases/com/temenos/TransactImageKits/App",
           "path": "/{{version}}.0.0/",
-          "file_name_pattern": "preimage-transact-app-{{db_type}}-{{version}}.0.0.zip",
+          "file_name_pattern": "preimage-transact-app-{{db_type}}-{{version}}.0.0",
+          "file_extension": ".zip",
           "db_filter": true,
-          "credentials_required": false
+          "credentials_required": false,
+          "is_utp_url": false
         },
         {
           "package_name": "irf-provider-container",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
           "path": "/irf-provider-container/",
-          "file_name_pattern": "irf-provider-container", 
+          "file_name_pattern": "irf-provider-container",
+          "file_extension": ".war",
           "credentials_required": true,
           "db_filter": false,
-          "jenkins_credentials_id": "utp-stable-dev"
+          "jenkins_credentials_id": "utp-stable-dev",
+          "is_utp_url": true
         },
         {
           "package_name": "t24-jars",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
           "path": "/t24-jars/",
-          "file_name_pattern": "t24-jars", 
+          "file_name_pattern": "t24-jars",
+          "file_extension": ".zip",
           "credentials_required": true,
           "db_filter": false,
-          "jenkins_credentials_id": "utp-stable-dev"
+          "jenkins_credentials_id": "utp-stable-dev",
+          "is_utp_url": true
         },
         {
           "package_name": "transact-explorer-wa",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
           "path": "/t24-jars/",
           "file_name_pattern": "transact-explorer-wa",
+          "file_extension": ".zip",
           "credentials_required": true,
           "db_filter": false,
-          "jenkins_credentials_id": "utp-stable-dev"
+          "jenkins_credentials_id": "utp-stable-dev",
+          "is_utp_url": true
         },
         {
           "package_name": "tb-server",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
           "path": "/tb-server/",
           "file_name_pattern": "tb-server",
+          "file_extension": ".war",
           "credentials_required": true,
           "db_filter": false,
-          "jenkins_credentials_id": "utp-stable-dev"
-        }
-      ]
-    },
-    {
-      "name": "FCM",
-      "version": "{{version}}",
-      "packages": [
-        {
-          "package_name": "fcm-backend",
-          "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
-          "path": "/fcm-backend/",
-          "file_name_pattern": "fcm-backend",
-          "credentials_required": true,
-          "jenkins_credentials_id": "utp-stable-dev"
-        },
-        {
-          "package_name": "fcm-frontend",
-          "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
-          "path": "/fcm-frontend/",
-          "file_name_pattern": "fcm-frontend",
-          "credentials_required": true,
-          "jenkins_credentials_id": "utp-stable-dev"
+          "jenkins_credentials_id": "utp-stable-dev",
+          "is_utp_url": true
         }
       ]
     }
