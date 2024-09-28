@@ -40,7 +40,7 @@
         {
           "package_name": "transact-explorer-wa",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
-          "path": "/{{version}}/t24-jars/",
+          "path": "/{{version}}/transact-explorer-wa/",
           "file_name_pattern": "transact-explorer-wa",
           "file_extension": ".war",
           "credentials_required": true,
