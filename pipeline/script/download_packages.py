@@ -21,17 +21,17 @@ def download_package(full_url, download_dir, auth=None, verify_ssl=True):
     print(f"Downloaded {local_filename}")
 
 # Function to get the latest file from a directory listing
-def get_latest_file_from_directory(url, file_name_pattern, auth=None, verify_ssl=True):
+def get_latest_file_from_directory(url, file_name_pattern, auth=None, verify_ssl=True, extension=".zip"):
     print(f"Fetching contents of {url} (SSL Verification: {verify_ssl})")
     response = requests.get(url, auth=auth, verify=verify_ssl)
     response.raise_for_status()  # Raise an error for bad HTTP responses
     soup = BeautifulSoup(response.text, 'html.parser')
 
-    # List files matching the pattern
-    files = [a['href'] for a in soup.find_all('a') if file_name_pattern in a['href']]
+    # List files matching the pattern and ensure only the required extension is included
+    files = [a['href'] for a in soup.find_all('a') if file_name_pattern in a['href'] and a['href'].endswith(extension)]
     
     if not files:
-        raise ValueError(f"No valid files found matching the pattern: {file_name_pattern}")
+        raise ValueError(f"No valid files found matching the pattern: {file_name_pattern} with extension {extension}")
     
     # Sort the files to ensure the latest one comes last (you can adjust the logic if needed)
     files.sort()
@@ -78,8 +78,9 @@ def main():
                 if package.get('credentials_required', False):
                     credentials = (args.username, args.password)
 
-                # Fetch the latest file based on the pattern
-                latest_file = get_latest_file_from_directory(package_url, file_name_pattern, auth=credentials, verify_ssl=not args.ignore_ssl)
+                # Fetch the latest file based on the pattern and download only files with the correct extension
+                extension = ".zip"  # Default to .zip files for all packages
+                latest_file = get_latest_file_from_directory(package_url, file_name_pattern, auth=credentials, verify_ssl=not args.ignore_ssl, extension=extension)
 
                 # Download the latest file (latest_file is now only the file name)
                 full_url = latest_file if latest_file.startswith("http") else package_url + latest_file
