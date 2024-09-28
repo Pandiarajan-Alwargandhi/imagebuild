@@ -9,7 +9,7 @@
           "package_name": "preimage-transact-app",
           "base_url": "http://maven.temenosgroup.com/content/repositories/t24-releases/com/temenos/TransactImageKits/App",
           "path": "/{{version}}.0.0/",
-          "file_name_pattern": "preimage-transact-app-{{db_type}}-{{version}}",
+          "file_name_pattern": "preimage-transact-app-{{db_type}}-{{version}}.0.0.zip",
           "db_filter": true,
           "credentials_required": false
         },
