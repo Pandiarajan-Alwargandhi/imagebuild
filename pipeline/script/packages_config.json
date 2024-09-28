@@ -18,7 +18,7 @@
         {
           "package_name": "irf-provider-container",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
-          "path": "/irf-provider-container/",
+          "path": "/{{version}}/irf-provider-container/",
           "file_name_pattern": "irf-provider-container",
           "file_extension": ".war",
           "credentials_required": true,
@@ -29,7 +29,7 @@
         {
           "package_name": "t24-jars",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
-          "path": "/t24-jars/",
+          "path": "/{{version}}/t24-jars/",
           "file_name_pattern": "t24-jars",
           "file_extension": ".zip",
           "credentials_required": true,
@@ -40,7 +40,7 @@
         {
           "package_name": "transact-explorer-wa",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
-          "path": "/t24-jars/",
+          "path": "/{{version}}/t24-jars/",
           "file_name_pattern": "transact-explorer-wa",
           "file_extension": ".zip",
           "credentials_required": true,
@@ -51,7 +51,7 @@
         {
           "package_name": "tb-server",
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
-          "path": "/tb-server/",
+          "path": "/{{version}}/tb-server/",
           "file_name_pattern": "tb-server",
           "file_extension": ".war",
           "credentials_required": true,
