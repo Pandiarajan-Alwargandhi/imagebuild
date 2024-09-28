@@ -42,7 +42,7 @@
           "base_url": "https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev",
           "path": "/{{version}}/t24-jars/",
           "file_name_pattern": "transact-explorer-wa",
-          "file_extension": ".zip",
+          "file_extension": ".war",
           "credentials_required": true,
           "db_filter": false,
           "jenkins_credentials_id": "utp-stable-dev",
