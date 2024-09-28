@@ -6,7 +6,6 @@ from bs4 import BeautifulSoup
 
 # Function to download the file
 def download_package(full_url, download_dir, auth=None, verify_ssl=True):
-    # Extract the filename from the URL and ensure we are not trying to save it as a directory
     local_filename = os.path.join(download_dir, full_url.split('/')[-1])
 
     print(f"Downloading {full_url} to {local_filename} (SSL Verification: {verify_ssl})")
@@ -21,7 +20,7 @@ def download_package(full_url, download_dir, auth=None, verify_ssl=True):
     print(f"Downloaded {local_filename}")
 
 # Function to get the latest file from a directory listing
-def get_latest_file_from_directory(url, file_name_pattern, auth=None, verify_ssl=True, extension=".zip"):
+def get_latest_file_from_directory(url, file_name_pattern, auth=None, verify_ssl=True, extension=".zip", is_utp_url=False):
     print(f"Fetching contents of {url} (SSL Verification: {verify_ssl})")
     response = requests.get(url, auth=auth, verify=verify_ssl)
     response.raise_for_status()  # Raise an error for bad HTTP responses
@@ -29,11 +28,10 @@ def get_latest_file_from_directory(url, file_name_pattern, auth=None, verify_ssl
 
     # List files matching the pattern and ensure only the required extension is included
     files = [a['href'] for a in soup.find_all('a') if file_name_pattern in a['href'] and a['href'].endswith(extension)]
-    
+
     if not files:
         raise ValueError(f"No valid files found matching the pattern: {file_name_pattern} with extension {extension}")
-    
-    # Sort the files to ensure the latest one comes last (you can adjust the logic if needed)
+
     files.sort()
 
     print("Available files in the directory:")
@@ -42,6 +40,11 @@ def get_latest_file_from_directory(url, file_name_pattern, auth=None, verify_ssl
 
     latest_file = files[-1]  # The last file is the latest
     print(f"Latest file found: {latest_file}")
+
+    # Return the full file URL for UTP URLs
+    if is_utp_url:
+        latest_file = url + latest_file.split('/')[-1]
+
     return latest_file
 
 # Main logic to fetch the page, filter the packages, and download them
@@ -66,25 +69,26 @@ def main():
         if product['name'] == args.product_groups:
             print(f"Processing product: {product['name']}")
             for package in product['packages']:
-                # Replace placeholders in the base_url and path
                 base_url = package['base_url']
                 package_url = base_url + package['path'].replace('{{version}}', args.version)
-
-                # Pattern to find the file
-                file_name_pattern = package['file_name_pattern'].replace('{{version}}', args.version).replace('{{db_type}}', args.db_type)
                 
                 # Handle credentials if required
                 credentials = None
                 if package.get('credentials_required', False):
                     credentials = (args.username, args.password)
 
-                # Fetch the latest file based on the pattern and download only files with the correct extension
-                extension = ".zip"  # Default to .zip files for all packages
-                latest_file = get_latest_file_from_directory(package_url, file_name_pattern, auth=credentials, verify_ssl=not args.ignore_ssl, extension=extension)
+                # Pattern to find the file
+                file_name_pattern = package['file_name_pattern'].replace('{{version}}', args.version).replace('{{db_type}}', args.db_type)
 
-                # Download the latest file (latest_file is now only the file name)
-                full_url = latest_file if latest_file.startswith("http") else package_url + latest_file
-                download_package(full_url, config['download_dir'], auth=credentials, verify_ssl=not args.ignore_ssl)
+                # Use extension from JSON
+                extension = package.get('file_extension', '.zip')
+                is_utp_url = package.get('is_utp_url', False)
+
+                # Fetch the latest file based on the pattern
+                latest_file = get_latest_file_from_directory(package_url, file_name_pattern, auth=credentials, verify_ssl=not args.ignore_ssl, extension=extension, is_utp_url=is_utp_url)
+
+                # Download the latest file
+                download_package(latest_file, config['download_dir'], auth=credentials, verify_ssl=not args.ignore_ssl)
 
 if __name__ == "__main__":
     main()
