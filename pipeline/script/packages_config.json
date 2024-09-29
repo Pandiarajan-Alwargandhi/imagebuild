@@ -62,5 +62,5 @@
       ]
     }
   ],
-  "download_dir": "/var/lib/jenkins/workspace/DownloadPackages/downloads"
+  "download_dir": "/var/lib/jenkins/workspace/DownloadPackages"
 }
