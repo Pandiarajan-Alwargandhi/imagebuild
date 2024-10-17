@@ -8,6 +8,7 @@ rules:
     - pods
     - pods/exec
     - pods/log
+    - events
   verbs:
     - get
     - list
