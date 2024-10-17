@@ -1,5 +1,5 @@
 {
-  "transact-159": [
+  "transact": [
     "check_pod_readiness",
     "check_deployment_files",
     "perform_api_curl_on_pods",
