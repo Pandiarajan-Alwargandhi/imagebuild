@@ -21,6 +21,12 @@ def load_config_files():
 
     return namespaces, test_cases, test_case_paths
 
+# Extract the app name from the namespace, handling cases with dynamically generated names like transact-159
+def get_app_name_from_namespace(namespace):
+    if "-" in namespace:
+        return namespace.split("-")[0]  # Extracts 'transact' from 'transact-159'
+    return namespace  # If no '-' found, return the namespace itself (for cases like 'transact')
+
 # Dynamically fetch paths based on application
 def get_app_paths(app_name, test_case_paths):
     return test_case_paths.get(app_name, {})
@@ -251,8 +257,11 @@ def main():
 
     report = []
     for namespace in namespaces:
-        app_paths = get_app_paths(namespace, test_case_paths)
-        tests = test_cases.get(namespace, test_cases.get("default", []))
+        # Extract app name from namespace
+        app_name = get_app_name_from_namespace(namespace)
+        
+        app_paths = get_app_paths(app_name, test_case_paths)
+        tests = test_cases.get(app_name, test_cases.get("default", []))
         namespace_report = {
             "namespace": namespace,
             "tests": tests,
