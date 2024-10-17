@@ -132,7 +132,14 @@ def check_deployment_files(v1_api, namespace, pod_name, deployment_directory):
         logging.error(f"Error executing command on pod {pod_name}: {e}")
         return f"Error executing command: {e}"
 
-def perform_api_curl_on_pods(v1_api, namespace, label_selector, api_curl_url):
+def perform_api_curl_on_pods(v1_api, namespace, app_paths):
+    label_selector = app_paths.get("label_selector", "")
+    api_curl_url = app_paths.get("api_curl_url", "")
+    
+    if not label_selector or not api_curl_url:
+        logging.error("API curl test cannot proceed due to missing label_selector or api_curl_url.")
+        return []
+
     try:
         api_response = v1_api.list_namespaced_pod(namespace, label_selector=label_selector)
         pods = api_response.items
@@ -174,7 +181,16 @@ def perform_api_curl_on_pods(v1_api, namespace, label_selector, api_curl_url):
         logging.error(f"Error listing pods in namespace {namespace}: {e}")
         return [{"error": str(e)}]
 
-def perform_web_curl_on_pods(v1_api, namespace, label_selector, web_curl_url, web_username, web_password):
+def perform_web_curl_on_pods(v1_api, namespace, app_paths):
+    label_selector = app_paths.get("label_selector", "")
+    web_curl_url = app_paths.get("web_curl_url", "")
+    web_username = app_paths.get("web_username", "")
+    web_password = app_paths.get("web_password", "")
+    
+    if not label_selector or not web_curl_url:
+        logging.error("Web curl test cannot proceed due to missing label_selector or web_curl_url.")
+        return []
+
     try:
         api_response = v1_api.list_namespaced_pod(namespace, label_selector=label_selector)
         pods = api_response.items
@@ -280,9 +296,9 @@ def main():
             if "check_deployment_files" in tests:
                 pod_details["check_deployment_files"] = check_deployment_files(v1_api, namespace, pod.metadata.name, app_paths["deployment_directory"])
             if "perform_api_curl_on_pods" in tests and "api_curl_url" in app_paths:
-                pod_details["perform_api_curl_on_pods"] = perform_api_curl_on_pods(v1_api, namespace, f"app={namespace}", app_paths["api_curl_url"])
+                pod_details["perform_api_curl_on_pods"] = perform_api_curl_on_pods(v1_api, namespace, app_paths)
             if "perform_web_curl_on_pods" in tests and "web_curl_url" in app_paths:
-                pod_details["perform_web_curl_on_pods"] = perform_web_curl_on_pods(v1_api, namespace, f"app={namespace}", app_paths["web_curl_url"], app_paths["web_username"], app_paths["web_password"])
+                pod_details["perform_web_curl_on_pods"] = perform_web_curl_on_pods(v1_api, namespace, app_paths)
             if "check_log_for_errors" in tests:
                 pod_details["check_log_for_errors"] = check_log_for_errors(v1_api, namespace, pod.metadata.name, app_paths["log_file_path"])
 
