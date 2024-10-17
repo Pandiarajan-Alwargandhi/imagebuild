@@ -1,7 +1,7 @@
-import os
-import argparse
-import json
 import requests
+import argparse
+import os
+import json
 from bs4 import BeautifulSoup
 import urllib3
 
@@ -11,6 +11,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Function to download the file
 def download_package(full_url, download_dir, auth=None, verify_ssl=True):
     local_filename = os.path.join(download_dir, full_url.split('/')[-1])
+
     print(f"Downloading {full_url} to {local_filename} (SSL Verification: {verify_ssl})")
 
     # Make the HTTP request with or without credentials
@@ -59,12 +60,10 @@ def main():
     parser.add_argument('--db_type', required=True, help="Database type (e.g., pos, h2d, etc.)")
     parser.add_argument('--ignore_ssl', action='store_true', help="Ignore SSL certificate errors")
     parser.add_argument('--username', help="Username for authenticated downloads")
-    # No need to add token argument in argparse
+    parser.add_argument('--password', help="Password for authenticated downloads")
+    parser.add_argument('--token', help="Token for authenticated downloads")  # New argument for token
 
     args = parser.parse_args()
-
-    # Get token from environment variable
-    token = os.getenv('TOKEN')
 
     # Load the config file
     with open(args.config) as f:
@@ -81,8 +80,12 @@ def main():
                 # Handle credentials if required
                 credentials = None
                 if package.get('credentials_required', False):
-                    if token:
-                        credentials = (args.username, token)
+                    if args.token:
+                        credentials = (args.username, args.token)
+                    elif args.password:
+                        credentials = (args.username, args.password)
+                    else:
+                        raise ValueError("Authentication required but no token or password provided")
 
                 # Pattern to find the file
                 file_name_pattern = package['file_name_pattern'].replace('{{version}}', args.version).replace('{{db_type}}', args.db_type)
