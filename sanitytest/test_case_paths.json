@@ -1,5 +1,5 @@
 {
-  "transact-159": {
+  "transact": {
     "deployment_directory": "/opt/jboss/wildfly/standalone/deployments",
     "log_file_path": "/opt/jboss/wildfly/standalone/log/server.log",
     "api_curl_url": "http://127.0.0.1:8080/irf-provider-container/api/v1.0.0/meta/apis",
