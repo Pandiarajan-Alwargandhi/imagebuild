@@ -157,7 +157,7 @@ def perform_api_curl_on_pods(v1_api, namespace, app_paths):
             api_exec_command = [
                 '/bin/sh',
                 '-c',
-                f'curl -o /dev/null -s -w "%{{http_code}}" {api_curl_url}'
+                f'curl -v -s -w "%{{http_code}}" -o /dev/null {api_curl_url}'  # Added verbose output
             ]
 
             try:
