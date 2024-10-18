@@ -2,8 +2,8 @@
   "transact": {
     "deployment_directory": "/opt/jboss/wildfly/standalone/deployments",
     "log_file_path": "/opt/jboss/wildfly/standalone/log/server.log",
-    "api_curl_url": "http://127.0.0.1:8080/irf-provider-container/api/v1.0.0/meta/apis",
-    "web_curl_url": "http://127.0.0.1:8080/transact-explorer-wa/#/login",
+    "api_curl_url": "http://transact-temenos-transact-app-svc.{namespace}.svc.cluster.local:8080/irf-provider-container/api/v1.0.0/meta/apis",
+    "web_curl_url": "http://transact-temenos-transact-app-svc.{namespace}.svc.cluster.local:8080/transact-explorer-wa/#/login",
     "web_username": "INPUTT",
     "web_password": "123456",
     "label_selector": "app.kubernetes.io/name=temenos-transact-app,app.kubernetes.io/instance=transact"
