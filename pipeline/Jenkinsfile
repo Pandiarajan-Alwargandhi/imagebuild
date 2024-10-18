@@ -1,117 +1,726 @@
 pipeline {
     agent any
-
+	
     parameters {
-        string(name: 'BASE_URL', defaultValue: 'https://utp-artifactoryha-sec.temenosgroup.com/artifactory/stable-dev', description: 'Base URL for the releases')
-        string(name: 'RELEASE', defaultValue: '202408', description: 'Release version (e.g., 202408)')
-        choice(name: 'PRODUCT_GROUP', choices: ['T24', 'FCM'], description: 'Select the product group to download')
-        string(name: 'ADDITIONAL_URL', defaultValue: 'http://maven.temenosgroup.com/content/repositories/t24-releases/com/temenos', description: 'Additional base URL for downloading packages')
-        string(name: 'ADDITIONAL_PRODUCTS', defaultValue: 'TransactImageKits/App,TransactImageKits/Web', description: 'Comma-separated list of additional products to download from the additional URL')
-        choice(name: 'DATABASE_TYPE', choices: ['pos', 'sql', 'h2d', 'pos-aws', 'ora', 'nuo'], description: 'Database type for APP package')
+        string(name: 'AZURE_SUBSCRIPTION_ID', defaultValue: '154c599e-26ff-40dc-a4d4-f0bf217b5790', description: 'Azure Subscription ID')
+		string(name: 'VERSION', defaultValue: '202408', description: 'Version of the product')
+        string(name: 'DB_TYPE', defaultValue: 'pos', description: 'Database type (e.g., pos, h2d, etc.)')
+        choice(name: 'PRODUCT_GROUPS', choices: ['T24', 'FCM'], description: 'Select the product group to download')
     }
 
     environment {
-        CREDENTIALS_ID = 'utp-stable-dev' // Replace with your actual credentials ID
+        HELM_DIR_APP = "helm"
+        HELM_DIR_SANITY = "sanitytest-chart"
+        POSTGRES_CHART_DIR = "postgres-chart"
+        KUBE_CONFIG = "/var/lib/jenkins/.kube/config"
+        WORKING_DIR_APP = "/var/lib/jenkins/workspace/deployment"
+        WORKING_DIR_SANITY = "/var/lib/jenkins/workspace/sanitytest"
+        DB_NAMESPACE = "postgres-${BUILD_ID}"
+        APP_NAMESPACE = "transact-${BUILD_ID}"
+        SANITY_NAMESPACE = "sanitytest-${BUILD_ID}"
+        IMAGE_TAG = "sanitytest:${BUILD_ID}"
+		ACR_URL = "pocrke.azurecr.io"
+        ACR_SECRET_NAME = "registry-secret"
+        ASSEMBLE_DIR = "/var/lib/jenkins/workspace/DownloadPackages/assemble_${BUILD_ID}"
+        DOWNLOAD_DIR = "/var/lib/jenkins/workspace/DownloadPackages"
+        REPO_URL = "https://github.com/Pandiarajan-Alwargandhi/imagebuild.git"
+        SCRIPT_PATH = "azure_resources.py"
+        DOCKER_REGISTRY = "utp-artifactoryha-sec.temenosgroup.com:443"
     }
 
-    stages {
-        stage('Checkout Python Script') {
+    stages {	
+	    stage('Install Python Dependencies') {
+            steps {
+                sh 'pip3 install azure-identity azure-mgmt-resource azure-mgmt-network azure-mgmt-containerregistry azure-mgmt-keyvault azure-mgmt-storage azure-mgmt-containerservice azure-storage-file-share beautifulsoup4 requests'
+            }
+        }
+		stage('Pre-Requisite Check and Kubectl Path Detection') {
             steps {
                 script {
-                    echo "Cloning the repository to pull the Python download script"
+                    echo "Checking and detecting kubectl path dynamically"
+                    try {
+                        sh '''
+                        if grep -qEi "(Microsoft|WSL)" /proc/version; then
+                            echo "WSL environment detected"
+                            if [ -x "/mnt/c/Program Files/Rancher Desktop/resources/resources/linux/bin/kubectl" ]; then
+                                KUBECTL_PATH="/mnt/c/Program Files/Rancher Desktop/resources/resources/linux/bin/kubectl"
+                            else
+                                KUBECTL_PATH=$(command -v kubectl)
+                            fi
+                        else
+                            echo "Standard Linux environment detected"
+                            KUBECTL_PATH=$(command -v kubectl)
+                            if [ -z "$KUBECTL_PATH" ]; then
+                                echo "kubectl not found. Installing..."
+                                curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                                chmod +x ./kubectl
+                                sudo mv ./kubectl /usr/local/bin/kubectl
+                                KUBECTL_PATH=$(command -v kubectl)
+                            fi
+                        fi
+
+                        if [ -z "$KUBECTL_PATH" ]; then
+                            echo "kubectl could not be found or installed. Exiting."
+                            exit 1
+                        else
+                            echo "kubectl found at: $KUBECTL_PATH"
+                        fi
+                        echo "KUBECTL_PATH=$KUBECTL_PATH" > kubectlpath.txt
+                        '''
+                        env.KUBECTL_PATH = readFile('kubectlpath.txt').trim().replace("KUBECTL_PATH=", "")
+                        echo "Final detected kubectl path: ${env.KUBECTL_PATH}"
+                    } catch (Exception e) {
+                        error "Failed to detect or install kubectl. Please check the environment settings."
+                    }
+                }
+            }
+        }
+		stage('Checkout Azure Resource Script from Git') {
+            steps {
+                script {
+                    echo "Cloning Azure resource script from GitHub"
                     withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                        sh "echo Cloning the repository using the token"
                         sh "rm -rf imagebuild"
                         sh "git clone https://${GITHUB_TOKEN}@github.com/Pandiarajan-Alwargandhi/imagebuild.git"
                     }
                 }
             }
         }
-
-        stage('Prepare') {
+        stage('Download Packages') {
             steps {
                 script {
-                    // Define product sets for T24 and FCM
-                    def productSets = [
-                        T24: ['irf-provider-container', 't24-jars', 'tb-server', 'transact-explorer-wa'],
-                        FCM: ['fcm-backend', 'fcm-frontend']
-                    ]
-
-                    // Select the product set based on the chosen group
-                    env.PRODUCTS = productSets[params.PRODUCT_GROUP].join(',')
-                    echo "Selected products for group ${params.PRODUCT_GROUP}: ${env.PRODUCTS}"
-                }
-            }
-        }
-
-        stage('Create URLs') {
-            steps {
-                script {
-                    // Split the PRODUCTS environment variable into a list of products
-                    def products = env.PRODUCTS.split(',')
-
-                    // Initialize the list of URLs for the main base URL
-                    def urls = products.collect { product ->
-                        "${params.BASE_URL}/${params.RELEASE}/${product}/"
-                    }
-
-                    // Add additional products if specified
-                    if (params.ADDITIONAL_PRODUCTS) {
-                        def additionalProducts = params.ADDITIONAL_PRODUCTS.split(',')
-                        additionalProducts.each { product ->
-                            urls.add("${params.ADDITIONAL_URL}/${product}/${params.RELEASE}.0.0/")
-                        }
-                    }
-
-                    // Adjust URL for WEB package
-                    urls = urls.collect { url ->
-                        if (url.contains('TransactImageKits/Web')) {
-                            return url.replace("${params.RELEASE}.0.0", "${params.RELEASE}.0")
-                        }
-                        return url
-                    }
-
-                    // Join the list into a string to store in an environment variable
-                    env.URLS = urls.join(',')
-                    echo "URLs to process: ${env.URLS}"
-                }
-            }
-        }
-
-        stage('Run Python Script for Downloading Packages') {
-            steps {
-                script {
-                    def downloadDir = "${env.WORKSPACE}/downloads"
-                    sh "mkdir -p ${downloadDir}"
-                    
-                    // Split the URLs string back into a list
-                    def urls = env.URLS.split(',')
-                    urls.each { url ->
-                        echo "Processing URL: ${url}"
-
+                    echo 'Running Python script to download packages based on Jenkins parameters'
+                    withCredentials([usernamePassword(credentialsId: 'utp-stable-dev', usernameVariable: 'USERNAME', passwordVariable: 'TOKEN')]) {
+                        echo "Username: $USERNAME"
+                        echo "Token Length: ${TOKEN.length()}"
+                        
                         sh """
-                        python3 imagebuild/pipeline/scripts/download_packages.py --url "${url}" --dir "${downloadDir}" --db_type "${params.DATABASE_TYPE}"
+                            echo Running in Bash
+                            export USERNAME="$USERNAME"
+                            export TOKEN="$TOKEN"
+                            /bin/bash -c "python3 imagebuild/pipeline/script/download_packages.py \
+                            --config imagebuild/pipeline/script/packages_config.json \
+                            --product_groups ${params.PRODUCT_GROUPS} --version ${params.VERSION} --db_type ${params.DB_TYPE} \
+                            --ignore_ssl --username '$USERNAME' --token '$TOKEN'"
                         """
                     }
                 }
             }
         }
 
-        stage('Post-Download Cleanup and Report') {
+        stage('Prepare Assemble Directory') {
             steps {
                 script {
-                    // Print the workspace directory
-                    echo "Workspace directory: ${env.WORKSPACE}"
-                    sh "ls -l ${env.WORKSPACE}/downloads"
+                    echo "Creating assembly directory at ${ASSEMBLE_DIR}"
+                    sh "mkdir -p ${ASSEMBLE_DIR}"
                 }
             }
         }
+        stage('Docker Login') {
+            steps {
+                script {
+                    echo "Logging into Azure Container Registry: ${ACR_URL}"
+                    withCredentials([usernamePassword(credentialsId: 'acr-credentials', usernameVariable: 'ACR_USERNAME', passwordVariable: 'ACR_PASSWORD')]) {
+                        sh "echo ${ACR_PASSWORD} | /mnt/c/Program\\ Files/Rancher\\ Desktop/resources/resources/linux/bin/docker login -u ${ACR_USERNAME} --password-stdin ${ACR_URL}"
+                    }
+                }
+            }
+        }
+        stage('Assemble preimage-transact-app') {
+            steps {
+                script {
+                    try {
+                        def appZip = sh(script: "ls ${DOWNLOAD_DIR} | grep -E 'preimage-transact-app-pos-${params.VERSION}.*\\.zip'", returnStdout: true).trim()
+                        echo "Found app zip: ${appZip}"
+        
+                        // Unzip the app zip file
+                        sh "unzip ${DOWNLOAD_DIR}/${appZip} -d ${ASSEMBLE_DIR}/preimage-app"
+        
+                        // Find the t24-jars file, ignoring the prefix number
+                        def jarsZip = sh(script: "ls ${DOWNLOAD_DIR} | grep -E 't24-jars-.*${params.VERSION}.*\\.zip'", returnStdout: true).trim()
+                        echo "Found jars zip: ${jarsZip}"
+        
+                        // Unzip the t24-jars and copy to app/t24lib
+                        sh """
+                            unzip ${DOWNLOAD_DIR}/${jarsZip} -d ${ASSEMBLE_DIR}/t24-jars
+                            mkdir -p ${ASSEMBLE_DIR}/preimage-app/${appZip.replace('.zip', '')}/app/t24lib
+                            cp -r ${ASSEMBLE_DIR}/t24-jars/* ${ASSEMBLE_DIR}/preimage-app/${appZip.replace('.zip', '')}/app/t24lib/
+                        """
+        
+                        // Copy the WAR files, ignoring the prefix number (matching only the version and file name)
+                        sh """
+                            cp ${DOWNLOAD_DIR}/irf-provider-container-*${params.VERSION}*.war ${ASSEMBLE_DIR}/preimage-app/${appZip.replace('.zip', '')}/deployments_extras/irf-provider-container.war
+                            cp ${DOWNLOAD_DIR}/tb-server-*${params.VERSION}*.war ${ASSEMBLE_DIR}/preimage-app/${appZip.replace('.zip', '')}/deployments_extras/tb-server.war
+                            cp ${DOWNLOAD_DIR}/transact-explorer-wa-*${params.VERSION}*.war ${ASSEMBLE_DIR}/preimage-app/${appZip.replace('.zip', '')}/deployments_extras/transact-explorer-wa.war
+                        """
+                    } catch (Exception e) {
+                        echo "Error during preimage-transact-app assembly: ${e.message}"
+                        error "Assembly failed at preimage-transact-app stage"
+                    }
+                }
+            }
+        }
+
+       /* stage('Assemble preimage-transact-app') {
+            steps {
+                script {
+                    try {
+                        def appZip = sh(script: "ls ${DOWNLOAD_DIR} | grep -E 'preimage-transact-app-pos-.*\\.zip'", returnStdout: true).trim()
+                        echo "Found app zip: ${appZip}"
+                        
+                        sh "unzip ${DOWNLOAD_DIR}/${appZip} -d ${ASSEMBLE_DIR}/preimage-app"
+                        
+                        def jarsZip = sh(script: "ls ${DOWNLOAD_DIR} | grep -E 't24-jars-.*\\.zip'", returnStdout: true).trim()
+                        echo "Found jars zip: ${jarsZip}"
+                        
+                        sh """
+                            unzip ${DOWNLOAD_DIR}/${jarsZip} -d ${ASSEMBLE_DIR}/t24-jars
+                            mkdir -p ${ASSEMBLE_DIR}/preimage-app/${appZip.replace('.zip', '')}/app/t24lib
+                            cp -r ${ASSEMBLE_DIR}/t24-jars/* ${ASSEMBLE_DIR}/preimage-app/${appZip.replace('.zip', '')}/app/t24lib/
+                        """
+                        
+                        sh """
+                            cp ${DOWNLOAD_DIR}/irf-provider-container-*.war ${ASSEMBLE_DIR}/preimage-app/${appZip.replace('.zip', '')}/deployments_extras/irf-provider-container.war
+                            cp ${DOWNLOAD_DIR}/tb-server-*.war ${ASSEMBLE_DIR}/preimage-app/${appZip.replace('.zip', '')}/deployments_extras/tb-server.war
+                            cp ${DOWNLOAD_DIR}/transact-explorer-wa-*.war ${ASSEMBLE_DIR}/preimage-app/${appZip.replace('.zip', '')}/deployments_extras/transact-explorer-wa.war
+                        """
+                    } catch (Exception e) {
+                        echo "Error during preimage-transact-app assembly: ${e.message}"
+                        error "Assembly failed at preimage-transact-app stage"
+                    }
+                }
+            }
+        }*/
+        stage('Verify Assembly') {
+            steps {
+                script {
+                    sh """
+                        echo "Contents of the preimage-app directory:"
+                        tree ${ASSEMBLE_DIR}/preimage-app
+                    """
+                }
+            }
+        }
+        stage('Build and Push Docker Images') {
+            steps {
+                script {
+                    try {
+                        // Find the app directory
+                        def appDir = sh(script: "find ${ASSEMBLE_DIR}/preimage-app -type d -name 'preimage-transact-app-pos-*'", returnStdout: true).trim()
+        
+                        // Ensure the directory exists
+                        if (!appDir) {
+                            error "App directory not found in ${ASSEMBLE_DIR}/preimage-app."
+                        }
+        
+                        echo "Building Docker image for app from directory: ${appDir}"
+        
+                        // Build the Docker image
+                        dir("${appDir}") {
+                            sh """
+                            /mnt/c/Program\\ Files/Rancher\\ Desktop/resources/resources/linux/bin/docker build --pull -t ${ACR_URL}/preimage-transact-app-pos:${BUILD_ID} . \
+                                --build-arg BASE_REPO=${DOCKER_REGISTRY}/temenos-baseimages-validated/ \
+                                --build-arg BASE_TAG=dev
+                            """
+                        }
+        
+                        // Push the Docker image to the repository
+                        echo "Pushing Docker image to repository: ${ACR_URL}/preimage-transact-app-pos:${BUILD_ID}"
+                        sh """
+                        /mnt/c/Program\\ Files/Rancher\\ Desktop/resources/resources/linux/bin/docker push ${ACR_URL}/preimage-transact-app-pos:${BUILD_ID}
+                        """
+        
+                    } catch (Exception e) {
+                        // Log error and stop the pipeline if the build or push fails
+                        echo "Error during Docker image build or push: ${e.message}"
+                        error "Docker build or push failed."
+                    }
+                }
+            }
+        }
+		/*stage('Build and Push Docker Images') {
+			steps {
+				script {
+					try {
+						// Find the app directory
+						def appDir = sh(script: "find ${ASSEMBLE_DIR}/preimage-app -type d -name 'preimage-transact-app-pos-*'", returnStdout: true).trim()
+
+						// Ensure the directory exists
+						if (!appDir) {
+						error "App directory not found in ${ASSEMBLE_DIR}/preimage-app."
+					}
+
+					echo "Building Docker image for app from directory: ${appDir}"
+
+					// Build the Docker image
+					dir("${appDir}") {
+						sh """
+						/mnt/c/Program\\ Files/Rancher\\ Desktop/resources/resources/linux/bin/docker build --pull -t ${ACR_URL}/preimage-transact-app-pos:${BUILD_ID} . \
+							--build-arg BASE_REPO=${DOCKER_REGISTRY}/temenos-baseimages-validated/ \
+							--build-arg BASE_TAG=dev
+						"""
+					}
+
+					// Push the Docker image to the repository
+					echo "Pushing Docker image to repository: ${ACR_URL}/preimage-transact-app-pos:${BUILD_ID}"
+					sh """
+					/mnt/c/Program\\ Files/Rancher\\ Desktop/resources/resources/linux/bin/docker push ${ACR_URL}/preimage-transact-app-pos:${BUILD_ID}
+					"""
+
+					} catch (Exception e) {
+						// Log error and stop the pipeline if the build or push fails
+						echo "Error during Docker image build or push: ${e.message}"
+						error "Docker build or push failed."
+					}
+				}
+			}
+		}*/
+
+        stage('Deploy Azure Resources') {
+            steps {
+                script {
+                    echo "Deploying Azure resources"
+                    withCredentials([
+                        string(credentialsId: 'azure-client-id', variable: 'AZURE_CLIENT_ID'),
+                        string(credentialsId: 'azure-client-secret', variable: 'AZURE_CLIENT_SECRET'),
+                        string(credentialsId: 'azure-tenant-id', variable: 'AZURE_TENANT_ID'),
+                        string(credentialsId: 'azure-subscription-id', variable: 'AZURE_SUBSCRIPTION_ID')
+                    ]) {
+                        // Run the Python script and capture the output
+                        def azureOutput = sh(script: "python3 imagebuild/${SCRIPT_PATH}", returnStdout: true).trim()
+        
+                        // Debug: Print the full output for troubleshooting
+                        echo "Azure resource creation output:\n${azureOutput}"
+        
+                        // Extract RESOURCE_GROUP and AKS_CLUSTER from the output
+                        def resourceGroupMatch = azureOutput =~ /RESOURCE_GROUP=([^\s]+)/
+                        def aksClusterMatch = azureOutput =~ /AKS_CLUSTER=([^\s]+)/
+        
+                        // Check if matches are found and assign to variables
+                        def resourceGroup = resourceGroupMatch ? resourceGroupMatch[0][1] : null
+                        def aksCluster = aksClusterMatch ? aksClusterMatch[0][1] : null
+        
+                        if (!resourceGroup || !aksCluster) {
+                            error "Failed to extract RESOURCE_GROUP or AKS_CLUSTER from Python script output"
+                        }
+        
+                        echo "Resource Group: ${resourceGroup}"
+                        echo "AKS Cluster: ${aksCluster}"
+        
+                        // Set the captured values as environment variables
+                        env.AKS_RESOURCE_GROUP = resourceGroup
+                        env.AKS_CLUSTER_NAME = aksCluster
+                    }
+                }
+            }
+        }
+        stage('Checkout Helm Charts and Config Files from Git') {
+            steps {
+                parallel(
+                    CheckoutAppChart: {
+                        dir("${WORKING_DIR_APP}") {
+                            script {
+                                echo "Cloning repository to download application Helm chart"
+                                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                                    sh "rm -rf imagebuild"
+                                    sh '''
+                                        git clone https://${GITHUB_TOKEN}:x-oauth-basic@${REPO_URL#https://}
+                                    '''
+                                }
+                            }
+                        }
+                    },
+                    CheckoutSanityChartAndConfigs: {
+                        dir("${WORKING_DIR_SANITY}") {
+                            script {
+                                echo "Cloning repository to download sanity test Helm chart and config files"
+                                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                                    sh "rm -rf imagebuild"
+                                    sh '''
+                                        git clone https://${GITHUB_TOKEN}:x-oauth-basic@${REPO_URL#https://}
+                                    '''
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
+        stage('Get AKS Credentials') {
+            steps {
+                dir("${WORKING_DIR_APP}") {
+                    script {
+                        echo "Setting Azure subscription and retrieving AKS cluster credentials"
+                        withCredentials([
+                            string(credentialsId: 'azure-client-id', variable: 'AZURE_CLIENT_ID'),
+                            string(credentialsId: 'azure-client-secret', variable: 'AZURE_CLIENT_SECRET'),
+                            string(credentialsId: 'azure-tenant-id', variable: 'AZURE_TENANT_ID')
+                        ]) {
+                            sh '''#!/bin/bash
+                                az login --service-principal -u ${AZURE_CLIENT_ID} -p ${AZURE_CLIENT_SECRET} --tenant ${AZURE_TENANT_ID}
+                                az account set --subscription ${AZURE_SUBSCRIPTION_ID}
+                                az aks get-credentials --resource-group ${AKS_RESOURCE_GROUP} --name ${AKS_CLUSTER_NAME} --file ${KUBE_CONFIG} --overwrite-existing
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Create DB Namespace and Deploy PostgreSQL') {
+            steps {
+                dir("${WORKING_DIR_APP}") {
+                    script {
+                        echo "Creating namespace: ${DB_NAMESPACE}"
+                        sh """
+                            "${env.KUBECTL_PATH}" create namespace ${DB_NAMESPACE}
+                        """
+                        
+                        echo "Create Registry Secret : ${DB_NAMESPACE}"
+                        withCredentials([
+                        string(credentialsId: 'azure-client-id', variable: 'AZURE_CLIENT_ID'),
+                        string(credentialsId: 'azure-client-secret', variable: 'AZURE_CLIENT_SECRET'),
+                        string(credentialsId: 'azure-tenant-id', variable: 'AZURE_TENANT_ID')
+                       ]) {
+                        sh """
+                            "${env.KUBECTL_PATH}" create secret docker-registry registry-secret \
+                            --docker-server=${ACR_URL} \
+                            --docker-username=${AZURE_CLIENT_ID} \
+                            --docker-password=${AZURE_CLIENT_SECRET} \
+                            --docker-email=placeholder@example.com \
+                            --namespace=${DB_NAMESPACE}
+                        """
+                        }
+                        echo "Deploying PostgreSQL Helm chart"
+                        sh """
+                            helm install postgres-chart imagebuild/${POSTGRES_CHART_DIR} --namespace ${DB_NAMESPACE} \
+                            --set postgresql.user=t24 \
+                            --set postgresql.password=t24 \
+                            --set image.pullSecret=registry-secret
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Wait for PostgreSQL Pod to Start and Check Logs') {
+            steps {
+                script {
+                    echo "Waiting for PostgreSQL pod to start and be ready"
+
+                    sh '''#!/bin/bash
+                    KUBECTL_PATH="${env.KUBECTL_PATH}"
+                    DB_NAMESPACE="${DB_NAMESPACE}"
+                    MAX_WAIT_TIME=$((30 * 60))  # Maximum wait time in seconds (e.g., 30 minutes)
+                    WAIT_INTERVAL=10  # Initial wait interval in seconds
+                    MAX_INTERVAL=60  # Maximum wait interval
+                    START_TIME=$(date +%s)
+
+                    POD_NAME=$("$KUBECTL_PATH" get pods -n "$DB_NAMESPACE" -l app=postgres -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+
+                    echo "PostgreSQL pod found: $POD_NAME"
+
+                    # Wait for the PostgreSQL pod to be ready
+                    while true; do
+                        POD_STATUS=$("$KUBECTL_PATH" get pod "$POD_NAME" -n "$DB_NAMESPACE" -o jsonpath='{.status.phase}')
+
+                        if [ "$POD_STATUS" = "Running" ]; then
+                            echo "PostgreSQL pod is running."
+                            break
+                        elif [ "$POD_STATUS" = "Failed" ] || [ "$POD_STATUS" = "CrashLoopBackOff" ]; then
+                            echo "PostgreSQL pod has entered a failed state: $POD_STATUS"
+                            "$KUBECTL_PATH" describe pod "$POD_NAME" -n "$DB_NAMESPACE"
+                            exit 1
+                        elif [ "$POD_STATUS" = "Pending" ] || [ "$POD_STATUS" = "ContainerCreating" ]; then
+                            echo "PostgreSQL pod is still being created. Status: $POD_STATUS"
+                        else
+                            echo "Unknown pod state: $POD_STATUS. Exiting..."
+                            exit 1
+                        fi
+
+                        # Check if we've exceeded the maximum wait time
+                        CURRENT_TIME=$(date +%s)
+                        ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+                        if [ "$ELAPSED_TIME" -ge "$MAX_WAIT_TIME" ]; then
+                            echo "Timed out waiting for PostgreSQL pod to be created."
+                            "$KUBECTL_PATH" describe pod "$POD_NAME" -n "$DB_NAMESPACE"
+                            "$KUBECTL_PATH" get events -n "$DB_NAMESPACE" --sort-by='{.lastTimestamp}'
+                            exit 1
+                        fi
+
+                        echo "Waiting for PostgreSQL pod to be ready... Retrying in $WAIT_INTERVAL seconds."
+                        sleep "$WAIT_INTERVAL"
+
+                        WAIT_INTERVAL=$((WAIT_INTERVAL * 2))
+                        if [ "$WAIT_INTERVAL" -gt "$MAX_INTERVAL" ]; then
+                            WAIT_INTERVAL=$MAX_INTERVAL
+                        fi
+                    done
+
+                    echo "Fetching PostgreSQL pod logs..."
+                    DB_LOGS=$("$KUBECTL_PATH" logs "$POD_NAME" -n "$DB_NAMESPACE")
+                    if echo "$DB_LOGS" | grep "database system is ready to accept connections"; then
+                        echo "PostgreSQL is ready and accepting connections."
+                    else
+                        echo "PostgreSQL is not ready yet. Checking logs again."
+                        exit 1
+                    fi
+                    '''
+                }
+            }
+        }
+        
+        stage('Deploy Application with PostgreSQL DB') {
+            steps {
+                dir("${WORKING_DIR_APP}") {
+                    script {
+                        echo "Creating namespace: ${APP_NAMESPACE}"
+                        sh """
+                            "${env.KUBECTL_PATH}" create namespace ${APP_NAMESPACE}
+                        """
+        
+                        echo "Creating ACR secret in the ${APP_NAMESPACE} namespace"
+                        withCredentials([
+                            string(credentialsId: 'azure-client-id', variable: 'AZURE_CLIENT_ID'),
+                            string(credentialsId: 'azure-client-secret', variable: 'AZURE_CLIENT_SECRET'),
+                            string(credentialsId: 'azure-tenant-id', variable: 'AZURE_TENANT_ID')
+                        ]) {
+                            sh """
+                                "${env.KUBECTL_PATH}" create secret docker-registry registry-secret \
+                                --docker-server=${ACR_URL} \
+                                --docker-username=${AZURE_CLIENT_ID} \
+                                --docker-password=${AZURE_CLIENT_SECRET} \
+                                --docker-email=placeholder@example.com \
+                                --namespace=${APP_NAMESPACE}
+                            """
+                        }
+        
+                        echo "Deploying application Helm chart"
+                        sh """
+                            helm install transact imagebuild/${HELM_DIR_APP} -n ${APP_NAMESPACE} \
+                            --set image.pullPolicy="IfNotPresent" \
+                            --set image.pullSecret=${ACR_SECRET_NAME} \
+                            --set image.app.repository="${ACR_URL}/preimage-transact-app-pos" \
+                            --set image.app.tag="${BUILD_ID}" \
+                            --set image.web.repository="${ACR_URL}/preimage-transact-app-pos" \
+                            --set image.web.tag="${BUILD_ID}" \
+                            --set image.api.repository="${ACR_URL}/preimage-transact-app-pos" \
+                            --set image.api.tag="${BUILD_ID}" \
+                            --set database.type="PostgreSQL" \
+                            --set database.user="t24" \
+                            --set database.password="t24" \
+                            --set database.host="postgres-service.${DB_NAMESPACE}.svc.cluster.local" \
+                            --set database.port="5432" \
+                            --set database.database="t24db" \
+                            --set webReplicaCount="0" \
+                            --set apiReplicaCount="0" \
+                            --set mq.connectionstring="tcp://activemq-temenos-transact-amq.activemq.svc.cluster.local:61616" \
+                            --set mq.user="admin" \
+                            --set mq.password="admin" \
+                            --set OLTP_ACTIVE="false" \
+                            --set ingress.enabled="false"\
+                            --timeout 20m0s \
+                            --wait
+                        """
+                    }
+                }
+            }
+        }
+    
+
+        stage('Create Kubernetes Namespace for Sanity Test') {
+            steps {
+                script {
+                    echo "Creating namespace for sanity test: ${SANITY_NAMESPACE}"
+                    sh """
+                        "${env.KUBECTL_PATH}" create namespace ${SANITY_NAMESPACE}
+                    """
+                }
+            }
+        }
+
+        stage('Create ACR Secret in Sanity Test Namespace') {
+            steps {
+                script {
+                    echo "Creating ACR secret in the ${SANITY_NAMESPACE} namespace"
+                    withCredentials([
+                        string(credentialsId: 'azure-client-id', variable: 'AZURE_CLIENT_ID'),
+                        string(credentialsId: 'azure-client-secret', variable: 'AZURE_CLIENT_SECRET'),
+                        string(credentialsId: 'azure-tenant-id', variable: 'AZURE_TENANT_ID')
+                    ]) {
+                        sh """
+                            "${env.KUBECTL_PATH}" create secret docker-registry registry-secret \
+                            --docker-server=${ACR_URL} \
+                            --docker-username=${AZURE_CLIENT_ID} \
+                            --docker-password=${AZURE_CLIENT_SECRET} \
+                            --docker-email=placeholder@example.com \
+                            --namespace=${SANITY_NAMESPACE}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Create namespaces.json Dynamically') {
+            steps {
+                script {
+                    echo "Creating namespaces.json with the APP_NAMESPACE"
+        
+                    // Define the path to namespaces.json
+                    def namespacesJsonFile = "${WORKING_DIR_SANITY}/imagebuild/sanitytest/namespaces.json"
+        
+                    // Manually create the JSON content without escape characters
+                    def newNamespacesContent = """
+                    [
+                      "${APP_NAMESPACE}"
+                    ]
+                    """
+        
+                    // Write the new content to the file
+                    writeFile file: namespacesJsonFile, text: newNamespacesContent
+        
+                    echo "Updated namespaces.json content:\n${newNamespacesContent}"
+                }
+            }
+        }
+
+        stage('Create ConfigMaps for Sanity Test') {
+            steps {
+                dir("${WORKING_DIR_SANITY}") {
+                    script {
+                        echo "Creating ConfigMaps from JSON files"
+                        sh """
+                            "${env.KUBECTL_PATH}" create configmap test-cases-config --from-file=imagebuild/sanitytest/test_cases.json -n ${SANITY_NAMESPACE}
+                            "${env.KUBECTL_PATH}" create configmap test-case-paths-config --from-file=imagebuild/sanitytest/test_case_paths.json -n ${SANITY_NAMESPACE}
+                            "${env.KUBECTL_PATH}" create configmap namespaces-config --from-file=imagebuild/sanitytest/namespaces.json -n ${SANITY_NAMESPACE}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Build and Push Sanity Test Image') {
+            steps {
+                dir("${WORKING_DIR_SANITY}/imagebuild/sanitytest") {
+                    script {
+                        echo "Building and pushing sanity test Docker image"
+                        withCredentials([
+                            string(credentialsId: 'azure-client-id', variable: 'AZURE_CLIENT_ID'),
+                            string(credentialsId: 'azure-client-secret', variable: 'AZURE_CLIENT_SECRET'),
+                            string(credentialsId: 'azure-tenant-id', variable: 'AZURE_TENANT_ID')
+                        ]) {
+                            def acrToken = sh(script: """
+                                az login --service-principal -u ${AZURE_CLIENT_ID} -p ${AZURE_CLIENT_SECRET} --tenant ${AZURE_TENANT_ID} --output none
+                                az acr login --name ${ACR_URL.split("\\.")[0]} --expose-token --query accessToken -o tsv
+                            """, returnStdout: true).trim()
+
+                            sh """
+                                echo ${acrToken} | /mnt/c/Program\\ Files/Rancher\\ Desktop/resources/resources/linux/bin/docker login ${ACR_URL} --username 00000000-0000-0000-0000-000000000000 --password-stdin
+                                /mnt/c/Program\\ Files/Rancher\\ Desktop/resources/resources/linux/bin/docker build -t ${ACR_URL}/${IMAGE_TAG} .
+                                /mnt/c/Program\\ Files/Rancher\\ Desktop/resources/resources/linux/bin/docker push ${ACR_URL}/${IMAGE_TAG}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Sanity Test Helm Chart') {
+            steps {
+                dir("${WORKING_DIR_SANITY}") {
+                    script {
+                        echo "Deploying sanity test Helm chart"
+                        sh """
+                            helm upgrade --install sanitytest imagebuild/${HELM_DIR_SANITY} \
+                            --set namespace=${SANITY_NAMESPACE} \
+                            --set image.pullSecret=registry-secret \
+                            --set job.image=${ACR_URL}/${IMAGE_TAG} \
+                            --set job.name=sanitytest-job-${BUILD_ID} \
+                            --set buildId=${BUILD_ID} \
+                            --namespace ${SANITY_NAMESPACE}
+                        """
+                    }
+                }
+            }
+        }
+    
+        stage('Wait for Sanity Test Completion') {
+            steps {
+                script {
+                    echo "Waiting for sanity test job to complete"
+                    sh '''#!/bin/bash
+                        KUBECTL_PATH="${env.KUBECTL_PATH}"
+                        SANITY_NAMESPACE="${SANITY_NAMESPACE}"
+                        MAX_WAIT_TIME=$((30 * 60))  # Maximum wait time in seconds (e.g., 30 minutes)
+                        WAIT_INTERVAL=10  # Initial wait interval in seconds
+                        MAX_INTERVAL=60  # Maximum wait interval
+                        START_TIME=$(date +%s)
+
+                        # Get the sanity test job name
+                        JOB_NAME="sanitytest-job-${BUILD_ID}"
+
+                        # Wait for the job to complete
+                        while [[ "$("$KUBECTL_PATH" get job $JOB_NAME -n "$SANITY_NAMESPACE" -o jsonpath='{.status.succeeded}')" != "1" ]] && \
+                              [[ "$("$KUBECTL_PATH" get job $JOB_NAME -n "$SANITY_NAMESPACE" -o jsonpath='{.status.failed}')" != "1" ]]; do
+                            echo "Waiting for sanity test job to complete..."
+                            sleep "$WAIT_INTERVAL"
+                            WAIT_INTERVAL=$((WAIT_INTERVAL * 2))
+                            if [ "$WAIT_INTERVAL" -gt "$MAX_INTERVAL" ]; then
+                                WAIT_INTERVAL=$MAX_INTERVAL
+                            fi
+                            CURRENT_TIME=$(date +%s)
+                            ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+                            if [ "$ELAPSED_TIME" -ge "$MAX_WAIT_TIME" ]; then
+                                echo "Timed out waiting for sanity test job to complete."
+                                exit 1
+                            fi
+                        done
+
+                        # Check if the job failed
+                        if [[ "$("$KUBECTL_PATH" get job $JOB_NAME -n "$SANITY_NAMESPACE" -o jsonpath='{.status.failed}')" == "1" ]]; then
+                            echo "Sanity test job failed. Exiting..."
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Fetch and Print Sanity Test Logs') {
+            steps {
+                script {
+                    echo "Fetching logs from sanity test pod"
+                    sh '''#!/bin/bash
+                        KUBECTL_PATH="${env.KUBECTL_PATH}"
+                        SANITY_NAMESPACE="${SANITY_NAMESPACE}"
+                        JOB_NAME="sanitytest-job-${BUILD_ID}"
+
+                        # Get the pod name associated with the job
+                        POD_NAME=$("$KUBECTL_PATH" get pods -n "$SANITY_NAMESPACE" -l job-name=$JOB_NAME -o jsonpath='{.items[0].metadata.name}')
+
+                        if [ -z "$POD_NAME" ]; then
+                            echo "Sanity test pod not found. Exiting..."
+                            exit 1
+                        fi
+
+                        # Fetch the logs from the pod
+                        echo "Fetching logs from sanity test pod: $POD_NAME"
+                        "$KUBECTL_PATH" logs "$POD_NAME" -n "$SANITY_NAMESPACE" --tail=100
+                    '''
+                }
+            }
+        }
+
     }
 
     post {
-        always {
-            echo "Cleaning workspace, except downloaded files"
-            cleanWs(patterns: [[pattern: 'downloads/**', type: 'EXCLUDE']])
-            echo "Workspace cleaned"
+        success {
+            echo "Pipeline completed successfully!"
+        }
+        failure {
+            echo "Pipeline failed."
         }
     }
 }
