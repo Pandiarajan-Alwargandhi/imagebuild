@@ -132,9 +132,16 @@ def check_deployment_files(v1_api, namespace, pod_name, deployment_directory):
         logging.error(f"Error executing command on pod {pod_name}: {e}")
         return f"Error executing command: {e}"
 
+# Function to replace the internal curl URLs based on the dynamically created namespace
+def substitute_namespace_in_url(url_template, namespace):
+    if not url_template:
+        return None
+    return url_template.replace("{namespace}", namespace)
+
 def perform_api_curl_on_pods(v1_api, namespace, app_paths):
     label_selector = app_paths.get("label_selector", "")
-    api_curl_url = app_paths.get("api_curl_url", "")
+    api_curl_url_template = app_paths.get("api_curl_url", "")
+    api_curl_url = substitute_namespace_in_url(api_curl_url_template, namespace)
     
     if not label_selector or not api_curl_url:
         logging.error("API curl test cannot proceed due to missing label_selector or api_curl_url.")
@@ -183,7 +190,8 @@ def perform_api_curl_on_pods(v1_api, namespace, app_paths):
 
 def perform_web_curl_on_pods(v1_api, namespace, app_paths):
     label_selector = app_paths.get("label_selector", "")
-    web_curl_url = app_paths.get("web_curl_url", "")
+    web_curl_url_template = app_paths.get("web_curl_url", "")
+    web_curl_url = substitute_namespace_in_url(web_curl_url_template, namespace)
     web_username = app_paths.get("web_username", "")
     web_password = app_paths.get("web_password", "")
     
