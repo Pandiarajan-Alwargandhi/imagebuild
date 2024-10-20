@@ -2,6 +2,7 @@ import os
 import json
 import time
 import logging
+import xml.etree.ElementTree as ET
 from kubernetes import client, config, stream
 from kubernetes.client.rest import ApiException
 
@@ -272,6 +273,52 @@ def check_log_for_errors(v1_api, namespace, pod_name, log_file_path):
         logging.error(f"Error executing command on pod {pod_name}: {e}")
         return [f"Error executing command: {e}"]
 
+def calculate_test_results(report):
+    total_tests = 0
+    passed_tests = 0
+
+    for namespace_report in report:
+        tests = namespace_report["tests"]
+        total_tests += len(tests)
+        
+        for pod in namespace_report["pods"]:
+            for test in tests:
+                if "check_pod_readiness" in test and all([pod.get("ready", False) for pod in namespace_report["pods"]]):
+                    passed_tests += 1
+                if "perform_api_curl_on_pods" in test and pod.get("api_curl_status", "000") == "200":
+                    passed_tests += 1
+                if "perform_web_curl_on_pods" in test and pod.get("web_curl_status", "000") == "200":
+                    passed_tests += 1
+                if "check_log_for_errors" in test and not pod.get("errors", []):
+                    passed_tests += 1
+
+    success_percentage = (passed_tests / total_tests) * 100 if total_tests > 0 else 0
+    return total_tests, passed_tests, success_percentage
+
+def generate_xml_report(report, success_percentage):
+    root = ET.Element("TestReport")
+    tests_summary = ET.SubElement(root, "Summary")
+    ET.SubElement(tests_summary, "TotalTests").text = str(total_tests)
+    ET.SubElement(tests_summary, "PassedTests").text = str(passed_tests)
+    ET.SubElement(tests_summary, "SuccessPercentage").text = f"{success_percentage:.2f}%"
+
+    for namespace_report in report:
+        namespace_element = ET.SubElement(root, "Namespace", name=namespace_report["namespace"])
+        for pod in namespace_report["pods"]:
+            pod_element = ET.SubElement(namespace_element, "Pod", name=pod["name"])
+            for key, value in pod.items():
+                if isinstance(value, list):
+                    list_element = ET.SubElement(pod_element, key)
+                    for item in value:
+                        ET.SubElement(list_element, "Item").text = str(item)
+                else:
+                    ET.SubElement(pod_element, key).text = str(value)
+
+    tree = ET.ElementTree(root)
+    xml_report_path = "/tmp/test_report.xml"
+    tree.write(xml_report_path)
+    return xml_report_path
+
 def main():
     load_k8s_config()
     v1_api = client.CoreV1Api()
@@ -321,10 +368,15 @@ def main():
 
     logging.info(f"Test results written to {report_file_path}")
     
+    # Calculate test results and generate XML report
+    total_tests, passed_tests, success_percentage = calculate_test_results(report)
+    xml_report_path = generate_xml_report(report, success_percentage)
+    logging.info(f"XML Test Report: {xml_report_path}")
+
     # Print the test results to stdout
-    with open(report_file_path, "r") as results_file:
-        report_data = results_file.read()
-        logging.info(f"Test results: {report_data}")
+    if success_percentage < 100:
+        logging.error(f"Tests failed with success percentage: {success_percentage}%")
+        raise Exception("Test suite did not pass successfully.")
 
 if __name__ == "__main__":
     main()
