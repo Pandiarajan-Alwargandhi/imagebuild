@@ -133,7 +133,6 @@ def check_deployment_files(v1_api, namespace, pod_name, deployment_directory):
         logging.error(f"Error executing command on pod {pod_name}: {e}")
         return f"Error executing command: {e}"
 
-# Function to replace the internal curl URLs based on the dynamically created namespace
 def substitute_namespace_in_url(url_template, namespace):
     if not url_template:
         return None
@@ -158,7 +157,7 @@ def perform_api_curl_on_pods(v1_api, namespace, app_paths):
             api_exec_command = [
                 '/bin/sh',
                 '-c',
-                f'curl -v -s -w "%{{http_code}}" -o /dev/null {api_curl_url}'  # Added verbose output
+                f'curl -v -s -w "%{{http_code}}" -o /dev/null {api_curl_url}'
             ]
 
             try:
@@ -295,7 +294,7 @@ def calculate_test_results(report):
     success_percentage = (passed_tests / total_tests) * 100 if total_tests > 0 else 0
     return total_tests, passed_tests, success_percentage
 
-def generate_xml_report(report, success_percentage):
+def generate_xml_report(report, total_tests, passed_tests, success_percentage):
     root = ET.Element("TestReport")
     tests_summary = ET.SubElement(root, "Summary")
     ET.SubElement(tests_summary, "TotalTests").text = str(total_tests)
@@ -370,7 +369,7 @@ def main():
     
     # Calculate test results and generate XML report
     total_tests, passed_tests, success_percentage = calculate_test_results(report)
-    xml_report_path = generate_xml_report(report, success_percentage)
+    xml_report_path = generate_xml_report(report, total_tests, passed_tests, success_percentage)
     logging.info(f"XML Test Report: {xml_report_path}")
 
     # Print the test results to stdout
